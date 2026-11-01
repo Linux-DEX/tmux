@@ -17,6 +17,17 @@ sh autogen.sh
 sudo make install
 ~~~
 
+On macOS, install deps with brew first. `configure` also requires an explicit
+jemalloc choice (`--enable-jemalloc` is recommended):
+
+~~~bash
+brew install libevent ncurses utf8proc pkg-config automake autoconf bison jemalloc
+./configure --enable-jemalloc && make
+sudo make install
+~~~
+
+Or build without jemalloc: `./configure --disable-jemalloc && make`
+
 `make install` installs to `/usr/local/bin/tmux` (`next-3.9`). It does **not**
 replace a distro package at `/usr/bin/tmux`. If both exist, you can still end
 up on the old binary (this fork’s borders/colors will be missing).
