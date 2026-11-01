@@ -16,3 +16,22 @@ sh autogen.sh
 ./configure && make
 sudo make install
 ~~~
+
+`make install` installs to `/usr/local/bin/tmux` (`next-3.9`). It does **not**
+replace a distro package at `/usr/bin/tmux`. If both exist, you can still end
+up on the old binary (this fork’s borders/colors will be missing).
+
+Remove the system package first, then install and restart any running server:
+
+~~~bash
+# Arch:            sudo pacman -R tmux
+# Debian/Ubuntu:   sudo apt remove tmux
+# Fedora:          sudo dnf remove tmux
+# macOS (brew):    brew uninstall tmux
+
+hash -r
+tmux kill-server 2>/dev/null
+tmux -V   # expect: tmux next-3.9
+~~~
+
+`/usr/local/bin` must come before `/usr/bin` in `PATH` (the usual default).
