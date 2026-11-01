@@ -1,4 +1,4 @@
-/* $OpenBSD: options-table.c,v 1.254 2026/10/16 07:59:06 nicm Exp $ */
+/* $OpenBSD: options-table.c,v 1.255 2026/10/26 10:38:16 nicm Exp $ */
 
 /*
  * Copyright (c) 2011 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -82,6 +82,7 @@ static const char *options_table_pane_border_lines_list[] = {
 	"single", "double", "heavy", "simple", "number", "spaces", "none",
 	"rounded", NULL
 };
+
 static const char *options_table_pane_border_type_list[] = {
 	"joined", "separate", "separate-active", NULL
 };
@@ -1601,6 +1602,13 @@ const struct options_table_entry options_table[] = {
 	  .text = "Line number mode in copy mode."
 	},
 
+	{ .name = "copy-mode-keep-column",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_WINDOW,
+	  .default_num = 0,
+	  .text = "Keep the cursor column when moving vertically in copy mode."
+	},
+
 	{ .name = "fill-character",
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_WINDOW,
@@ -1746,16 +1754,6 @@ const struct options_table_entry options_table[] = {
 	  .default_num = PANE_STATUS_OFF,
 	  .text = "Position of the pane status lines."
 	},
-
-	{ .name = "pane-border-style",
-	  .type = OPTIONS_TABLE_STRING,
-	  .scope = OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE,
-	  .default_str = "fg=themelightgrey",
-	  .flags = OPTIONS_TABLE_IS_STYLE,
-	  .separator = ",",
-	  .text = "Style of the pane status lines."
-	},
-
 	{ .name = "pane-border-type",
 	  .type = OPTIONS_TABLE_CHOICE,
 	  .scope = OPTIONS_TABLE_WINDOW,
@@ -1765,6 +1763,15 @@ const struct options_table_entry options_table[] = {
 		  "between adjacent panes, 'separate' draws a full border "
 		  "around each pane, 'separate-active' uses the same layout "
 		  "but only draws the border around the active pane."
+	},
+
+	{ .name = "pane-border-style",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE,
+	  .default_str = "fg=themelightgrey",
+	  .flags = OPTIONS_TABLE_IS_STYLE,
+	  .separator = ",",
+	  .text = "Style of the pane status lines."
 	},
 
 	{ .name = "pane-colours",

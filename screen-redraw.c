@@ -1859,8 +1859,8 @@ redraw_set_draw_context(struct redraw_draw_ctx *dctx,
 {
 	struct client	*c = scene->c;
 	struct session	*s = c->session;
-	struct options	*oo = s->options;
 	struct window	*w = s->curw->window;
+	struct options	*oo = s->options;
 	struct tty	*tty = &c->tty;
 	u_int		 lines;
 

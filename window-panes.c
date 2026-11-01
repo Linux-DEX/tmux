@@ -1,4 +1,4 @@
-/* $OpenBSD: window-panes.c,v 1.6 2026/10/20 12:00:58 nicm Exp $ */
+/* $OpenBSD: window-panes.c,v 1.7 2026/10/29 09:45:10 nicm Exp $ */
 
 /*
  * Copyright (c) 2026 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -108,17 +108,41 @@ window_panes_get_source(struct window_panes_modedata *data, struct session **sp,
 }
 
 static void
+window_panes_copy_screen(struct screen_write_ctx *ctx, struct screen *src,
+    u_int sx, u_int sy)
+{
+	struct grid_cell	gc, sel;
+	u_int			x, y, cx = ctx->s->cx, cy = ctx->s->cy;
+
+	screen_write_fast_copy(ctx, src, 0, src->grid->hsize, sx, sy);
+	if (src->sel == NULL)
+		return;
+	for (y = 0; y < sy && y < screen_size_y(src); y++) {
+		for (x = 0; x < sx && x < screen_size_x(src); x++) {
+			if (!screen_check_selection(src, x, y))
+				continue;
+			grid_view_get_cell(src->grid, x, y, &gc);
+			if (!screen_select_cell(src, &sel, &gc))
+				continue;
+			sel.flags &= ~GRID_FLAG_SELECTED;
+			grid_view_set_cell(ctx->s->grid, cx + x, cy + y, &sel);
+		}
+	}
+}
+
+static void
 window_panes_set_preview(struct window_panes_modedata *data)
 {
 	struct window_pane	*wp = data->wp;
-	struct screen		*src = &wp->base, *dst;
+	struct screen		*src = wp->screen, *dst;
 	struct screen_write_ctx	 ctx;
-	u_int			 sx = screen_size_x(src), sy = screen_size_y(src);
+	u_int			 sx = screen_size_x(src);
+	u_int			 sy = screen_size_y(src);
 
 	data->preview = dst = xmalloc(sizeof *data->preview);
 	screen_init(dst, sx, sy, 0);
 	screen_write_start(&ctx, dst);
-	screen_write_fast_copy(&ctx, src, 0, src->grid->hsize, sx, sy);
+	window_panes_copy_screen(&ctx, src, sx, sy);
 	screen_write_stop(&ctx);
 	dst->mode = src->mode;
 	dst->cx = src->cx;
@@ -422,46 +446,6 @@ window_panes_mark_pane_status_borders(u_char *map, struct window *w,
 	}
 }
 
-/* Mark a full rectangle around each tiled pane for separate borders. */
-static void
-window_panes_mark_pane_border_separate(u_char *map, struct window *w,
-    struct layout_cell *root, u_int osx, u_int osy, u_int dsx, u_int dsy)
-{
-	struct window_pane	*wp;
-	u_int			 x, y, sx, sy;
-	int			 left, right, top, bottom;
-
-	TAILQ_FOREACH(wp, &w->panes, entry) {
-		if (window_panes_pane_floating(wp))
-			continue;
-		if (!window_panes_get_geometry(wp, root, osx, osy, dsx, dsy, &x,
-		    &y, &sx, &sy))
-			continue;
-
-		left = (int)x - 1;
-		right = (int)x + (int)sx;
-		top = (int)y - 1;
-		bottom = (int)y + (int)sy;
-
-		if (top >= 0) {
-			window_panes_mark_hline(map, dsx, dsy, left, right + 1,
-			    top);
-		}
-		if (bottom < (int)dsy) {
-			window_panes_mark_hline(map, dsx, dsy, left, right + 1,
-			    bottom);
-		}
-		if (left >= 0) {
-			window_panes_mark_vline(map, dsx, dsy, left, top,
-			    bottom + 1);
-		}
-		if (right < (int)dsx) {
-			window_panes_mark_vline(map, dsx, dsy, right, top,
-			    bottom + 1);
-		}
-	}
-}
-
 static int
 window_panes_get_floating_borders(struct window_pane *wp, u_int osx, u_int osy,
     u_int dsx, u_int dsy, int *xp, int *yp, int *x2p, int *y2p)
@@ -637,6 +621,45 @@ window_panes_mark_border_joins_cell(u_char *map, struct layout_cell *lc,
 		}
 	}
 }
+static void
+window_panes_mark_pane_border_separate(u_char *map, struct window *w,
+    struct layout_cell *root, u_int osx, u_int osy, u_int dsx, u_int dsy)
+{
+	struct window_pane	*wp;
+	u_int			 x, y, sx, sy;
+	int			 left, right, top, bottom;
+
+	TAILQ_FOREACH(wp, &w->panes, entry) {
+		if (window_panes_pane_floating(wp))
+			continue;
+		if (!window_panes_get_geometry(wp, root, osx, osy, dsx, dsy, &x,
+		    &y, &sx, &sy))
+			continue;
+
+		left = (int)x - 1;
+		right = (int)x + (int)sx;
+		top = (int)y - 1;
+		bottom = (int)y + (int)sy;
+
+		if (top >= 0) {
+			window_panes_mark_hline(map, dsx, dsy, left, right + 1,
+			    top);
+		}
+		if (bottom < (int)dsy) {
+			window_panes_mark_hline(map, dsx, dsy, left, right + 1,
+			    bottom);
+		}
+		if (left >= 0) {
+			window_panes_mark_vline(map, dsx, dsy, left, top,
+			    bottom + 1);
+		}
+		if (right < (int)dsx) {
+			window_panes_mark_vline(map, dsx, dsy, right, top,
+			    bottom + 1);
+		}
+	}
+}
+
 
 static void
 window_panes_draw_borders(struct screen_write_ctx *ctx, struct window *w,
@@ -868,7 +891,7 @@ window_panes_draw_pane(struct window_panes_modedata *data,
     struct screen_write_ctx *ctx, struct window_pane *wp,
     struct layout_cell *root, u_int osx, u_int osy, u_int dsx, u_int dsy)
 {
-	struct screen		*s = &wp->base;
+	struct screen		*s = (wp == data->wp ? &wp->base : wp->screen);
 	u_int			 pane, x, y, sx, sy;
 
 	if (!window_panes_pane_visible(wp))
@@ -890,7 +913,7 @@ window_panes_draw_pane(struct window_panes_modedata *data,
 	    sy <= screen_size_y(data->preview))
 		s = data->preview;
 	if (osx <= dsx && osy <= dsy)
-		screen_write_fast_copy(ctx, s, 0, s->grid->hsize, sx, sy);
+		window_panes_copy_screen(ctx, s, sx, sy);
 	else
 		screen_write_preview(ctx, s, sx, sy);
 	window_panes_draw_number(data, ctx, wp, pane, x, y, sx, sy);
@@ -1021,12 +1044,11 @@ window_panes_init(struct window_mode_entry *wme, struct cmdq_item *item,
 	data->delay = delay;
 	data->ignore_keys = args_has(args, 'N');
 
+	window_panes_set_preview(data);
 	if (args_has(args, 'Z'))
 		data->zoomed = -1;
 	else {
 		data->zoomed = (w->flags & WINDOW_ZOOMED);
-		if (!data->zoomed)
-			window_panes_set_preview(data);
 		if (!data->zoomed && window_zoom(wp) == 0)
 			server_redraw_window(w);
 	}
