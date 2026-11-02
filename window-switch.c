@@ -37,6 +37,11 @@ static enum prompt_result window_switch_prompt_callback(void *, const char *,
 			     enum prompt_key_result);
 
 #define WINDOW_SWITCH_DEFAULT_COMMAND "switch-client -Zt '%%'"
+#define WINDOW_SWITCH_COMMAND_DEFAULT_COMMAND "%%"
+#define WINDOW_SWITCH_COMMAND_DEFAULT_FORMAT \
+	"#{command_list_name}" \
+	"#{?command_list_alias, (#{command_list_alias}),}" \
+	" #[dim]#{command_list_description}#[default]"
 
 #define WINDOW_SWITCH_DEFAULT_FORMAT		\
 	"#{?window_format," \
@@ -64,7 +69,8 @@ const struct window_mode window_switch_mode = {
 enum window_switch_type {
 	WINDOW_SWITCH_TYPE_SESSION,
 	WINDOW_SWITCH_TYPE_WINDOW,
-	WINDOW_SWITCH_TYPE_INPUT
+	WINDOW_SWITCH_TYPE_INPUT,
+	WINDOW_SWITCH_TYPE_COMMAND
 };
 
 struct window_switch_itemdata {
@@ -184,6 +190,31 @@ window_switch_add_input(struct window_switch_modedata *data, u_int idx,
 	item->text = format_expand(ft, data->format);
 }
 
+static void
+window_switch_add_command(struct window_switch_modedata *data,
+    const struct cmd_entry *entry, u_int *order)
+{
+	struct window_switch_itemdata	*item;
+	struct format_tree		*ft;
+	const char			*alias, *description;
+
+	ft = format_create(NULL, NULL, FORMAT_NONE, 0);
+	format_add(ft, "command_list_name", "%s", entry->name);
+	alias = entry->alias != NULL ? entry->alias : "";
+	format_add(ft, "command_list_alias", "%s", alias);
+	description = entry->description != NULL ? entry->description : "";
+	format_add(ft, "command_list_description", "%s", description);
+	format_add(ft, "switch_item", "%s", entry->name);
+
+	item = window_switch_add_item(data);
+	item->type = WINDOW_SWITCH_TYPE_COMMAND;
+	item->value = entry->name;
+	item->order = (*order)++;
+	item->text = format_expand(ft, data->format);
+
+	format_free(ft);
+}
+
 static int
 window_switch_compare(const void *a0, const void *b0)
 {
@@ -242,6 +273,15 @@ window_switch_build(struct window_switch_modedata *data)
 		for (i = 0; i < data->lines_size; i++)
 			window_switch_add_input(data, i, ft);
 		format_free(ft);
+		break;
+	case WINDOW_SWITCH_TYPE_COMMAND:
+		{
+			const struct cmd_entry	**entryp;
+
+			for (entryp = cmd_table; *entryp != NULL; entryp++)
+				window_switch_add_command(data, *entryp,
+				    &order);
+		}
 		break;
 	}
 
@@ -390,24 +430,32 @@ window_switch_init(struct window_mode_entry *wme,
 			data->reversed = 1;
 	}
 
-	if (args_has(args, 'w'))
+	if (args_has(args, 'C'))
+		data->type = WINDOW_SWITCH_TYPE_COMMAND;
+	else if (args_has(args, 'f'))
+		data->type = WINDOW_SWITCH_TYPE_INPUT;
+	else if (args_has(args, 'w'))
 		data->type = WINDOW_SWITCH_TYPE_WINDOW;
 	else
 		data->type = WINDOW_SWITCH_TYPE_SESSION;
-	if (args_has(args, 'f'))
-		data->type = WINDOW_SWITCH_TYPE_INPUT;
 
 	data->filter = xstrdup("");
 	if (args == NULL || !args_has(args, 'F')) {
 		if (data->type == WINDOW_SWITCH_TYPE_INPUT)
 			data->format = xstrdup("#{switch_item}");
+		else if (data->type == WINDOW_SWITCH_TYPE_COMMAND)
+			data->format = xstrdup(WINDOW_SWITCH_COMMAND_DEFAULT_FORMAT);
 		else
 			data->format = xstrdup(WINDOW_SWITCH_DEFAULT_FORMAT);
 	} else
 		data->format = xstrdup(args_get(args, 'F'));
-	if (args == NULL || args_count(args) == 0)
-		data->command = xstrdup(WINDOW_SWITCH_DEFAULT_COMMAND);
-	else
+	if (args == NULL || args_count(args) == 0) {
+		if (data->type == WINDOW_SWITCH_TYPE_COMMAND)
+			data->command = xstrdup(
+			    WINDOW_SWITCH_COMMAND_DEFAULT_COMMAND);
+		else
+			data->command = xstrdup(WINDOW_SWITCH_DEFAULT_COMMAND);
+	} else
 		data->command = xstrdup(args_string(args, 0));
 
 	memset(&pd, 0, sizeof pd);
@@ -545,6 +593,7 @@ window_switch_run_command(struct window_switch_modedata *data, struct client *c)
 		}
 		break;
 	case WINDOW_SWITCH_TYPE_INPUT:
+	case WINDOW_SWITCH_TYPE_COMMAND:
 		target = xstrdup(item->value);
 		cmd_find_from_pane(&fs, data->wp, 0);
 		break;
@@ -555,7 +604,8 @@ window_switch_run_command(struct window_switch_modedata *data, struct client *c)
 	command = cmd_template_replace(data->command, target, 1);
 	if (command != NULL && *command != '\0') {
 		state = cmdq_new_state(&fs, NULL, 0);
-		if (item->type == WINDOW_SWITCH_TYPE_INPUT)
+		if (item->type == WINDOW_SWITCH_TYPE_INPUT ||
+		    item->type == WINDOW_SWITCH_TYPE_COMMAND)
 			cmdq_add_format(state, "switch_item", "%s", item->value);
 		status = cmd_parse_and_append(command, NULL, c, state, &error);
 		if (status == CMD_PARSE_ERROR) {

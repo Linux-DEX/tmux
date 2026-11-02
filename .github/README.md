@@ -4,6 +4,15 @@ tmux is a terminal multiplexer: it enables a number of terminals to be created,
 accessed, and controlled from a single screen. tmux may be detached from a
 screen and continue running in the background, then later reattached.
 
+This is the **Linux-DEX** fork of `next-3.9`. Flagship differences from upstream:
+
+- `pane-border-type` defaults to **`separate`** (full border around each pane); Prefix+`B` cycles `separate` → `separate-active` → `joined`
+- Prefix+`P` opens a **fuzzy command palette** (`switch-mode -C`)
+- Prefix+`h`/`j`/`k`/`l` focus panes; Prefix+`H`/`J`/`K`/`L` swap with neighbors
+- one-command `install.sh` (below)
+
+See `example_tmux.conf` for a short starter config.
+
 ## Install (one command)
 
 macOS, Debian/Ubuntu, Fedora/RHEL, Arch, and openSUSE:

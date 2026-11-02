@@ -677,6 +677,10 @@ server_client_check_mouse_in_pane(struct window_pane *wp, int px, int py,
 	bdr_left = wp->xoff - 1;
 	if (!sb_overlay && w->sb_pos == PANE_SCROLLBARS_LEFT)
 		bdr_left -= sb_pad + sb_w;
+	if (w->sb_pos == PANE_SCROLLBARS_LEFT)
+		bdr_right = wp->xoff + (int)wp->sx;
+	else
+		bdr_right = wp->xoff + (int)wp->sx + sb_pad + sb_w;
 
 	if (sb_overlay && sb_w != 0 &&
 	    py >= wp->yoff && py < wp->yoff + (int)wp->sy &&
@@ -708,10 +712,11 @@ server_client_check_mouse_in_pane(struct window_pane *wp, int px, int py,
 	    py != pane_status_line && py != wp->yoff + (int)wp->sy) ||
 	    (wp->yoff == 0 && py < (int)wp->sy) ||
 	    (py >= wp->yoff && py < wp->yoff + (int)wp->sy)) &&
-	    ((w->sb_pos == PANE_SCROLLBARS_RIGHT &&
+	    ((separate && px >= bdr_left && px <= bdr_right) ||
+	    (!separate && w->sb_pos == PANE_SCROLLBARS_RIGHT &&
 	    px >= wp->xoff &&
 	    px < wp->xoff + (int)wp->sx + sb_pad + sb_w) ||
-	    (w->sb_pos == PANE_SCROLLBARS_LEFT &&
+	    (!separate && w->sb_pos == PANE_SCROLLBARS_LEFT &&
 	    px >= wp->xoff - sb_pad - sb_w &&
 	    px < wp->xoff + (int)wp->sx - sb_pad - sb_w))) {
 		/* Check if in the scrollbar. */
@@ -735,9 +740,10 @@ server_client_check_mouse_in_pane(struct window_pane *wp, int px, int py,
 		} else if ((separate || (window_pane_is_floating(wp) &&
 		    window_pane_get_pane_lines(wp) != PANE_LINES_NONE)) &&
 		    (px == bdr_left ||
+		    px == bdr_right ||
 		    py == wp->yoff - 1 ||
 		    py == wp->yoff + (int)wp->sy)) {
-			/* Floating or separate left, bottom or top border. */
+			/* Floating or separate border (all four sides). */
 			return (KEYC_MOUSE_LOCATION_BORDER);
 		} else {
 			/* Must be inside the pane. */

@@ -389,6 +389,8 @@ key_bindings_init(void)
 		"bind -N 'Rotate through the panes' C-o { rotate-window }",
 		"bind -N 'Suspend the current client' C-z { suspend-client }",
 		"bind -N 'Select next layout' Space { next-layout }",
+		"bind -N 'Cycle pane border type' B { if -F '#{==:#{pane-border-type},separate}' { set -w pane-border-type separate-active ; display-message 'pane-border-type separate-active' } { if -F '#{==:#{pane-border-type},separate-active}' { set -w pane-border-type joined ; display-message 'pane-border-type joined' } { set -w pane-border-type separate ; display-message 'pane-border-type separate' } } }",
+		"bind -N 'Command palette' P { new-pane -E -x75% -y40% -X0 -Y0; move-pane -P bottom-centre; switch-mode -Ck }",
 		"bind -N 'Break pane to a new window' ! { break-pane }",
 		"bind -N 'Split window vertically' '\"' { split-window }",
 		"bind -N 'List all paste buffers' '#' { list-buffers }",

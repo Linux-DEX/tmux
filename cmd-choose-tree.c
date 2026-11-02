@@ -96,11 +96,11 @@ const struct cmd_entry cmd_customize_mode_entry = {
 
 const struct cmd_entry cmd_switch_mode_entry = {
 	.name = "switch-mode",
-	.description = "Switch the active pane mode.",
+	.description = "Fuzzy-switch sessions, windows, or commands.",
 	.alias = NULL,
 
-	.args = { "F:f:kO:rst:wZ", 0, 1, cmd_choose_tree_args_parse },
-	.usage = "[-krsZw] [-F format] [-f path] [-O sort-order] "
+	.args = { "CF:f:kO:rst:wZ", 0, 1, cmd_choose_tree_args_parse },
+	.usage = "[-CkrsZw] [-F format] [-f path] [-O sort-order] "
 		 CMD_TARGET_PANE_USAGE " [command]",
 
 	.target = { 't', CMD_FIND_PANE, 0 },

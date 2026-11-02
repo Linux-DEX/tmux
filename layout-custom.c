@@ -716,6 +716,16 @@ layout_parse(struct window *w, const char *input, char **cause)
 	/* Assign the panes into the cells. */
 	layout_assign(w, &pctx);
 
+	/*
+	 * Joined-era layout strings can be too small for separate borders.
+	 * Grow the tree (and window) before fixing pane geometry.
+	 */
+	lc = layout_fit(w);
+	if (lc != NULL &&
+	    (layout_cell_is_tiled(lc) || layout_cell_has_tiled_child(lc)) &&
+	    (lc->g.sx > w->sx || lc->g.sy > w->sy))
+		resize_window(w, lc->g.sx, lc->g.sy, -1, -1);
+
 	/* Update pane attributes. */
 	layout_fix_offsets(w);
 	layout_fix_panes(w, NULL);

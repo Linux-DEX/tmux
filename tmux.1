@@ -320,10 +320,20 @@ Choose which buffer to paste interactively from a list.
 List all key bindings.
 .It C\-l
 Switch the attached client back to the last session.
+.It B
+Cycle
+.Ic pane\-border\-type
+between
+.Cm separate ,
+.Cm separate\-active ,
+and
+.Cm joined .
 .It D
 Choose a client to detach.
 .It H
 Swap the current pane with the pane to the left.
+.It P
+Open the fuzzy command palette.
 .It J
 Swap the current pane with the pane below.
 .It K
@@ -3261,22 +3271,26 @@ The
 command works only if at least one client is attached.
 .It Xo
 .Ic switch\-mode
-.Op Fl krsZw
+.Op Fl CkrsZw
 .Op Fl F Ar format
 .Op Fl f Ar path
 .Op Fl O Ar sort\-order
 .Op Fl t Ar target\-pane
 .Op Ar command
 .Xc
-Put a pane into switch mode, where a session or window may be chosen
+Put a pane into switch mode, where a session, window, or command may be chosen
 interactively from a list.
-Each session or window is shown on one line and the list is narrowed by typing:
+Each item is shown on one line and the list is narrowed by typing:
 the typed text is matched against each item with fuzzy
 matching and only matching items are shown, sorted by how well they match.
 .Fl s
-lists sessions (the default) and
+lists sessions (the default),
 .Fl w
-lists windows.
+lists windows, and
+.Fl C
+opens a fuzzy command palette of all
+.Nm
+commands (name, alias, and description).
 .Fl O
 specifies the initial sort order within matches of equal quality: one of
 .Ql index ,
@@ -3297,7 +3311,7 @@ The following keys may be used in switch mode:
 .It Li "Escape" Ta "Exit mode"
 .El
 .Pp
-After a session or window is chosen, the first instance of
+After an item is chosen, the first instance of
 .Ql %%
 and all instances of
 .Ql %1
@@ -3306,7 +3320,9 @@ are replaced by the target in
 and the result executed as a command.
 If
 .Ar command
-is not given, "switch\-client \-Zt \[aq]%%\[aq]" is used.
+is not given, "switch\-client \-Zt \[aq]%%\[aq]" is used for sessions and
+windows, and the selected command name is run for
+.Fl C .
 .Fl F
 specifies the format for each item in the list.
 .Pp
@@ -3325,7 +3341,15 @@ When a choice is selected,
 .Ql %%
 and
 .Ql %1
-are replaced by the original line
+are replaced by the original line.
+.Pp
+.Fl C
+lists every command from
+.Ic list\-commands .
+The default display format includes the name, alias, and description.
+Prefix
+.Ql P
+opens this command palette in a floating pane.
 .Pp
 .Fl k
 kills the pane when the mode is exited.
@@ -6270,6 +6294,24 @@ If set to
 or
 .Cm bottom\-floating ,
 status lines are shown only on floating panes.
+.Pp
+.It Xo Ic pane\-border\-type
+.Op Cm joined | separate | separate\-active
+.Xc
+How pane borders are drawn.
+.Cm joined
+shares a single border between adjacent panes (classic
+.Nm
+look).
+.Cm separate
+draws a full border around each pane (the default).
+.Cm separate\-active
+uses the same layout as
+.Cm separate
+but only draws the border around the active pane.
+Prefix
+.Ql B
+cycles between these values.
 .Pp
 .It Ic pane\-border\-style Ar style
 Set the pane border style for panes aside from the active pane.

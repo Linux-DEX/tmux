@@ -1758,11 +1758,12 @@ const struct options_table_entry options_table[] = {
 	  .type = OPTIONS_TABLE_CHOICE,
 	  .scope = OPTIONS_TABLE_WINDOW,
 	  .choices = options_table_pane_border_type_list,
-	  .default_num = PANE_BORDER_TYPE_JOINED,
+	  .default_num = PANE_BORDER_TYPE_SEPARATE,
 	  .text = "How pane borders are drawn: 'joined' shares borders "
 		  "between adjacent panes, 'separate' draws a full border "
 		  "around each pane, 'separate-active' uses the same layout "
-		  "but only draws the border around the active pane."
+		  "but only draws the border around the active pane. "
+		  "Defaults to 'separate'."
 	},
 
 	{ .name = "pane-border-style",

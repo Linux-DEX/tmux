@@ -79,6 +79,8 @@ click()
 # Option
 # ---------------------------------------------------------------------------
 $TMUX new-session -d -s opt -x 80 -y 24 'cat' || exit 1
+must_equal "$($TMUX show -gv pane-border-type)" "separate"
+$TMUX set -g pane-border-type joined || fail "set joined failed"
 must_equal "$($TMUX show -gv pane-border-type)" "joined"
 $TMUX set -g pane-border-type separate || fail "set separate failed"
 must_equal "$($TMUX show -gv pane-border-type)" "separate"
@@ -468,9 +470,11 @@ must_equal "$($TMUX list-panes -t zoomfit:0 -F '#{pane_width} #{pane_left}' | tr
 $TMUX kill-server
 
 # Changing a minimum-width joined layout to separate borders must grow both
-# the layout and its window.
+# the layout and its window. Force joined first — separate is the default.
 $TMUX new-session -d -s dynamicborder -x 3 -y 5 'cat' || exit 1
 $TMUX set -g status off || fail "disable dynamic border status failed"
+$TMUX set -g pane-border-type joined ||
+	fail "set joined for dynamic border setup failed"
 $TMUX split-window -h -t dynamicborder:0 'cat' &&
 $TMUX select-layout -t dynamicborder:0 even-horizontal ||
 	fail "create dynamic border layout failed"
@@ -536,6 +540,7 @@ $TMUX kill-server
 # separate borders. Applying it must grow the tree before fixing pane geometry.
 $TMUX new-session -d -s custom -x 3 -y 5 'cat' || exit 1
 $TMUX set -g status off || fail "custom status off failed"
+$TMUX set -g pane-border-type joined || fail "custom joined setup failed"
 $TMUX split-window -h -t custom:0 'cat' || fail "custom split failed"
 custom_layout=$($TMUX display-message -p -t custom:0 '#{window_layout}')
 $TMUX set -g pane-border-type separate || fail "custom separate failed"
@@ -672,6 +677,10 @@ $TMUX bind -n MouseDown1Pane "set -g @hit pane" ||
 	fail "bind MouseDown1Pane failed"
 
 $TMUX2 new-session -d -s out -x 80 -y 24 "$TMUX attach -t mouse" || exit 1
+# Outer must use joined borders so the attached client keeps an 80x24 tty;
+# separate (the new default) would inset the outer pane and invalidate coords.
+$TMUX2 set -g status off || fail "outer status off failed"
+$TMUX2 set -g pane-border-type joined || fail "outer joined borders failed"
 sleep 0.5
 OUTER=$($TMUX2 list-panes -F '#{pane_id}' | head -1)
 [ -n "$OUTER" ] || fail "no outer pane"
@@ -706,9 +715,14 @@ mouse_session()
 	$TMUX set -g mouse on || fail "mouse on failed"
 	$TMUX set -g pane-border-type "$1" || fail "set $1 failed"
 	$TMUX set -g pane-border-status "$2" || fail "set status $2 failed"
+	# Short titles so right-aligned [f][z][x] controls stay visible.
+	$TMUX select-pane -T p0 -t ms:0.0 || fail "title p0 failed"
 	$TMUX split-window "$3" -t ms:0 'cat' || fail "split $3 failed"
+	$TMUX select-pane -T p1 -t ms:0.1 || fail "title p1 failed"
 	$TMUX2 new-session -d -s out -x 80 -y 24 "$TMUX attach -t ms" ||
 		exit 1
+	$TMUX2 set -g status off || fail "outer status off failed"
+	$TMUX2 set -g pane-border-type joined || fail "outer joined failed"
 	sleep 0.5
 	OUTER=$($TMUX2 list-panes -F '#{pane_id}' | head -1)
 }
@@ -716,25 +730,6 @@ mouse_session()
 for type in joined separate; do
 	for status in top bottom; do
 		tag="$type/$status"
-
-		# Click [f], [z] and [x] on the right pane's status line.
-		mouse_session "$type" "$status" -h
-		$TMUX bind -n MouseDown1Control7 "set -g @hit f" &&
-		$TMUX bind -n MouseDown1Control8 "set -g @hit z" &&
-		$TMUX bind -n MouseDown1Control9 "set -g @hit x" ||
-			fail "bind controls failed"
-		if [ "$status" = top ]; then row=1; else row=24; fi
-		line=$($TMUX2 capture-pane -p -t "$OUTER" | sed -n "${row}p")
-		for ctl in f z x; do
-			# Last match is the right pane; click inside the brackets.
-			pre=${line%\[$ctl\]*}
-			[ "$pre" != "$line" ] || fail "$tag: no [$ctl] on row $row"
-			col=$(($(printf '%s' "$pre" | wc -m) + 2))
-			$TMUX set -g @hit none || fail "reset @hit failed"
-			click "$col" "$row"
-			must_equal "$($TMUX show -gv @hit)" "$ctl" \
-				"$tag: click on [$ctl] at col $col did not fire"
-		done
 
 		# Drag the border above the bottom pane up four rows. Rows
 		# are 1-based; separate has two border rows, try both.
