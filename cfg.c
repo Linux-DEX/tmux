@@ -20,9 +20,11 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "tmux.h"
 
@@ -36,6 +38,71 @@ static int		  cfg_started;
 int                       cfg_quiet = 1;
 char                    **cfg_files;
 u_int                     cfg_nfiles;
+
+/*
+ * Path used by save-layout / load-layout / upgrade-server. Prefer a writable
+ * directory next to the last configuration file; otherwise the home directory.
+ */
+char *
+layout_get_path(void)
+{
+	const char	*home;
+	char		*copy, *dir, *path;
+
+	if (cfg_nfiles > 0) {
+		copy = xstrdup(cfg_files[cfg_nfiles - 1]);
+		dir = dirname(copy);
+		if (access(dir, W_OK) == 0) {
+			xasprintf(&path, "%s/%s", dir, TMUX_LAYOUT_FILE);
+			free(copy);
+			return (path);
+		}
+		free(copy);
+	}
+
+	if ((home = find_home()) != NULL) {
+		xasprintf(&path, "%s/%s", home, TMUX_LAYOUT_FILE);
+		return (path);
+	}
+
+	return (NULL);
+}
+
+/* If upgrade-server left an autoload marker, queue load-layout once. */
+static void
+layout_maybe_autoload(void)
+{
+	char			*layout_path, *marker, *cmd;
+	struct cmd_parse_result	*pr;
+	struct cmdq_item	*new_item;
+	struct cmdq_state	*state;
+
+	if ((layout_path = layout_get_path()) == NULL)
+		return;
+	xasprintf(&marker, "%s.autoload", layout_path);
+	if (access(marker, F_OK) != 0) {
+		free(marker);
+		free(layout_path);
+		return;
+	}
+	unlink(marker);
+	free(marker);
+
+	xasprintf(&cmd, "load-layout -f %s", layout_path);
+	pr = cmd_parse_from_string(cmd, NULL);
+	free(cmd);
+	free(layout_path);
+	if (pr->status == CMD_PARSE_ERROR) {
+		cfg_add_cause("autoload layout: %s", pr->error);
+		free(pr->error);
+		return;
+	}
+	state = cmdq_new_state(NULL, NULL, 0);
+	new_item = cmdq_get_command(pr->cmdlist, state);
+	cmdq_append(NULL, new_item);
+	cmd_list_free(pr->cmdlist);
+	cmdq_free_state(state);
+}
 
 static enum cmd_retval
 cfg_client_done(struct cmdq_item *item, __unused void *data)
@@ -54,6 +121,7 @@ cfg_done(__unused struct cmdq_item *item, __unused void *data)
 		return (CMD_RETURN_NORMAL);
 	cfg_finished = 1;
 
+	layout_maybe_autoload();
 	cfg_show_causes(NULL);
 
 	if (cfg_item != NULL) {

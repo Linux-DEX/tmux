@@ -78,6 +78,8 @@ static void	window_copy_update_image_refresh(struct window_copy_mode_data *);
 static int	window_copy_visible_has_images(struct window_copy_mode_data *);
 #endif
 static char    *window_copy_match_at_cursor(struct window_copy_mode_data *);
+static void	window_copy_match_start_end(struct window_copy_mode_data *,
+		    u_int, u_int *, u_int *);
 static void	window_copy_scroll_to(struct window_mode_entry *, u_int, u_int,
 		    int);
 static int	window_copy_search_compare(struct grid *, u_int, u_int,
@@ -388,6 +390,9 @@ struct window_copy_mode_data {
 	int			 jumptype;
 	struct utf8_data	*jumpchar;
 
+	int			 hint_active;	/* fingers-like hint mode */
+	u_int			 hint_count;
+
 	struct event	 dragtimer;
 #define WINDOW_COPY_DRAG_REPEAT_TIME 50000
 
@@ -395,6 +400,13 @@ struct window_copy_mode_data {
 #define WINDOW_COPY_REFRESH_INTERVAL 50000
 	int		 refresh_active;
 };
+
+/* Home-row first, then remaining letters/digits — fingers-style labels. */
+#define WINDOW_COPY_HINT_KEYS \
+	"asdfqwerzxcvjklmiopghtybnmASDFQWERZXCVJKLMIOPGHTYBNM1234567890"
+#define WINDOW_COPY_HINT_REGEX \
+	"https?://[^[:space:]]+|(/[[:alnum:]_./~+-]+)|" \
+	"[0-9a-fA-F]{7,40}"
 
 static void
 window_copy_scroll_timer(__unused int fd, __unused short events, void *arg)
@@ -3561,12 +3573,236 @@ window_copy_cmd_line_numbers_toggle(struct window_copy_cmd_state *cs)
 	return (WINDOW_COPY_CMD_NOTHING);
 }
 
+/* Count distinct search-mark runs (one per match) on the visible grid. */
+static u_int
+window_copy_hint_count_matches(struct window_copy_mode_data *data)
+{
+	struct grid	*gd = data->backing->grid;
+	u_int		 last, at, n = 0;
+	u_char		 prev = 0, mark;
+
+	if (data->searchmark == NULL)
+		return (0);
+	last = gd->sx * gd->sy;
+	for (at = 0; at < last; at++) {
+		mark = data->searchmark[at];
+		if (mark != 0 && mark != prev)
+			n++;
+		prev = mark;
+	}
+	return (n);
+}
+
+/* Return linear index of the start of the idx-th match, or (u_int)-1. */
+static u_int
+window_copy_hint_match_at(struct window_copy_mode_data *data, u_int idx)
+{
+	struct grid	*gd = data->backing->grid;
+	u_int		 last, at, n = 0;
+	u_char		 prev = 0, mark;
+
+	if (data->searchmark == NULL)
+		return ((u_int)-1);
+	last = gd->sx * gd->sy;
+	for (at = 0; at < last; at++) {
+		mark = data->searchmark[at];
+		if (mark != 0 && mark != prev) {
+			if (n == idx)
+				return (at);
+			n++;
+		}
+		prev = mark;
+	}
+	return ((u_int)-1);
+}
+
+static int
+window_copy_hint_label_at(struct window_copy_mode_data *data, u_int fx,
+    u_int fy, char *label)
+{
+	u_int	 at, idx, start;
+	u_char	 prev = 0, mark;
+	struct grid *gd = data->backing->grid;
+	u_int	 last;
+
+	if (!data->hint_active || data->searchmark == NULL)
+		return (0);
+	if (window_copy_search_mark_at(data, fx, fy, &at) != 0)
+		return (0);
+	mark = data->searchmark[at];
+	if (mark == 0)
+		return (0);
+	if (at > 0 && data->searchmark[at - 1] == mark)
+		return (0); /* not the first cell of the match */
+
+	last = gd->sx * gd->sy;
+	idx = 0;
+	prev = 0;
+	for (start = 0; start < last; start++) {
+		mark = data->searchmark[start];
+		if (mark != 0 && mark != prev) {
+			if (start == at) {
+				if (idx >= sizeof WINDOW_COPY_HINT_KEYS - 1)
+					return (0);
+				*label = WINDOW_COPY_HINT_KEYS[idx];
+				return (1);
+			}
+			idx++;
+		}
+		prev = mark;
+	}
+	return (0);
+}
+
+static enum window_copy_cmd_action
+window_copy_cmd_hint(struct window_copy_cmd_state *cs)
+{
+	struct window_mode_entry	*wme = cs->wme;
+	struct window_copy_mode_data	*data = wme->data;
+	struct client			*c = cs->c;
+	const char			*pattern;
+	u_int				 n, max;
+
+	pattern = args_string(cs->wargs, 0);
+	if (pattern == NULL || *pattern == '\0')
+		pattern = WINDOW_COPY_HINT_REGEX;
+
+	free(data->searchstr);
+	data->searchstr = xstrdup(pattern);
+	data->searchregex = 1;
+	data->searchtype = WINDOW_COPY_SEARCHDOWN;
+	data->searchdirection = 1;
+	data->searchx = data->cx;
+	data->searchy = screen_hsize(data->backing) - data->oy + data->cy;
+	data->searcho = data->oy;
+	data->timeout = 0;
+
+	window_copy_search_marks(wme, NULL, 1, 1);
+	n = window_copy_hint_count_matches(data);
+	max = sizeof WINDOW_COPY_HINT_KEYS - 1;
+	if (n > max)
+		n = max;
+	data->hint_active = (n != 0);
+	data->hint_count = n;
+
+	if (c != NULL) {
+		if (n == 0)
+			status_message_set(c, -1, 1, 0, 0, "no hint matches");
+		else
+			status_message_set(c, -1, 1, 0, 0,
+			    "hint: %u match%s — type label to copy",
+			    n, n == 1 ? "" : "es");
+	}
+	return (WINDOW_COPY_CMD_REDRAW);
+}
+
+static enum window_copy_cmd_action
+window_copy_cmd_hint_select(struct window_copy_cmd_state *cs)
+{
+	struct window_mode_entry	*wme = cs->wme;
+	struct window_copy_mode_data	*data = wme->data;
+	struct client			*c = cs->c;
+	struct session			*s = cs->s;
+	const char			*arg, *keys = WINDOW_COPY_HINT_KEYS;
+	const char			*kp;
+	char				*text = NULL, *cause = NULL;
+	u_int				 idx, at, sx, px, py, hsize;
+	size_t				 len;
+
+	if (!data->hint_active || data->searchmark == NULL) {
+		if (c != NULL)
+			status_message_set(c, -1, 1, 0, 0, "hint mode inactive");
+		return (WINDOW_COPY_CMD_NOTHING);
+	}
+
+	arg = args_string(cs->wargs, 0);
+	if (arg == NULL || arg[0] == '\0')
+		return (WINDOW_COPY_CMD_NOTHING);
+	kp = strchr(keys, arg[0]);
+	if (kp == NULL) {
+		if (c != NULL)
+			status_message_set(c, -1, 1, 0, 0, "unknown hint: %c",
+			    arg[0]);
+		return (WINDOW_COPY_CMD_NOTHING);
+	}
+	idx = (u_int)(kp - keys);
+	if (idx >= data->hint_count) {
+		if (c != NULL)
+			status_message_set(c, -1, 1, 0, 0, "hint out of range");
+		return (WINDOW_COPY_CMD_NOTHING);
+	}
+
+	at = window_copy_hint_match_at(data, idx);
+	if (at == (u_int)-1)
+		return (WINDOW_COPY_CMD_NOTHING);
+
+	sx = screen_size_x(data->backing);
+	hsize = screen_hsize(data->backing);
+	py = at / sx;
+	px = at - (py * sx);
+	/* searchmark indexes visible backing rows; map to absolute grid y */
+	window_copy_scroll_to(wme, px, hsize - data->oy + py, 1);
+
+	/*
+	 * Extract from the search mark at the cursor. If that fails (edge
+	 * cases around oy), fall back to reading the marked run by index.
+	 */
+	text = window_copy_match_at_cursor(data);
+	if (text == NULL || *text == '\0') {
+		struct grid		*gd = data->backing->grid;
+		struct grid_cell	 gc;
+		u_int			 start, end, pos, absy;
+		size_t			 tlen = 0;
+
+		free(text);
+		window_copy_match_start_end(data, at, &start, &end);
+		text = NULL;
+		for (pos = start; pos <= end; pos++) {
+			absy = (hsize - data->oy) + (pos / sx);
+			grid_get_cell(gd, pos % sx, absy, &gc);
+			if (gc.flags & GRID_FLAG_PADDING)
+				continue;
+			if (gc.flags & GRID_FLAG_TAB) {
+				text = xrealloc(text, tlen + 2);
+				text[tlen++] = '\t';
+			} else {
+				text = xrealloc(text, tlen + gc.data.size + 1);
+				memcpy(text + tlen, gc.data.data, gc.data.size);
+				tlen += gc.data.size;
+			}
+		}
+		if (text != NULL)
+			text[tlen] = '\0';
+	}
+	if (text == NULL || *text == '\0') {
+		free(text);
+		if (c != NULL)
+			status_message_set(c, -1, 1, 0, 0, "empty hint match");
+		return (WINDOW_COPY_CMD_REDRAW);
+	}
+	len = strlen(text);
+	/* paste_set takes ownership of text on success (and on size==0). */
+	if (paste_set(text, len, NULL, &cause) != 0) {
+		if (c != NULL)
+			status_message_set(c, -1, 1, 0, 0, "%s",
+			    cause != NULL ? cause : "paste failed");
+		free(cause);
+		free(text);
+		return (WINDOW_COPY_CMD_REDRAW);
+	}
+	if (c != NULL)
+		status_message_set(c, -1, 1, 0, 0, "copied hint match");
+	(void)s;
+
+	data->hint_active = 0;
+	data->hint_count = 0;
+	window_copy_clear_marks(wme);
+	return (WINDOW_COPY_CMD_CANCEL);
+}
+
 static const struct {
 	const char			 *command;
-	u_int				  minargs;
-	u_int				  maxargs;
 	struct args_parse		  args;
-
 #define WINDOW_COPY_CMD_FLAG_READONLY 0x1
 	int				  flags;
 
@@ -3578,6 +3814,18 @@ static const struct {
 	  .flags = 0,
 	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
 	  .f = window_copy_cmd_append_selection
+	},
+	{ .command = "hint",
+	  .args = { "", 0, 1, NULL },
+	  .flags = WINDOW_COPY_CMD_FLAG_READONLY,
+	  .clear = WINDOW_COPY_CMD_CLEAR_NEVER,
+	  .f = window_copy_cmd_hint
+	},
+	{ .command = "hint-select",
+	  .args = { "", 1, 1, NULL },
+	  .flags = WINDOW_COPY_CMD_FLAG_READONLY,
+	  .clear = WINDOW_COPY_CMD_CLEAR_NEVER,
+	  .f = window_copy_cmd_hint_select
 	},
 	{ .command = "append-selection-and-cancel",
 	  .args = { "", 0, 0, NULL },
@@ -4299,7 +4547,9 @@ window_copy_command(struct window_mode_entry *wme, struct client *c,
 		}
 	}
 
-	if (strncmp(command, "search-", 7) != 0 && data->searchmark != NULL) {
+	if (strncmp(command, "search-", 7) != 0 &&
+	    strncmp(command, "hint", 4) != 0 &&
+	    data->searchmark != NULL) {
 		keys = options_get_number(wp->window->options, "mode-keys");
 		if (clear == WINDOW_COPY_CMD_CLEAR_EMACS_ONLY &&
 		    keys == MODEKEY_VI)
@@ -4307,6 +4557,8 @@ window_copy_command(struct window_mode_entry *wme, struct client *c,
 		if (clear != WINDOW_COPY_CMD_CLEAR_NEVER) {
 			window_copy_clear_marks(wme);
 			data->searchx = data->searchy = -1;
+			data->hint_active = 0;
+			data->hint_count = 0;
 		}
 		if (action == WINDOW_COPY_CMD_MOVE)
 			action = WINDOW_COPY_CMD_REDRAW;
@@ -5460,6 +5712,8 @@ window_copy_clear_marks(struct window_mode_entry *wme)
 
 	free(data->searchmark);
 	data->searchmark = NULL;
+	data->hint_active = 0;
+	data->hint_count = 0;
 }
 
 static int
@@ -5683,6 +5937,15 @@ window_copy_write_one(struct window_mode_entry *wme,
 #endif
 			window_copy_update_style(wme, fx, fy, &gc, mgc, cgc,
 			    mkgc, clgc);
+			if (data->hint_active) {
+				char	 label;
+
+				if (window_copy_hint_label_at(data, fx, fy,
+				    &label)) {
+					gc.attr |= GRID_ATTR_REVERSE;
+					utf8_set(&gc.data, label);
+				}
+			}
 			if (gc.flags & GRID_FLAG_PADDING) {
 				if (ctx->s->cy == py && ctx->s->cx <= px + fx) {
 					gc.flags &= ~GRID_FLAG_PADDING;
