@@ -48,12 +48,14 @@ static enum prompt_result window_switch_prompt_callback(void *, const char *,
 		"#{window_name} " \
 		"#[dim]#{session_name}:#{window_index}#{window_flags}#[default] " \
 		"#[dim]#{pane_current_command}#[default] " \
-	        "#[dim]#{?#{!=:#{pane_title},#{host_short}},#{pane_title},}#[default]" \
+		"#[dim]#{=|-28|…:pane_current_path}#[default]" \
 	"," \
 		"#{session_name} " \
-		"#[dim]#{session_windows} windows#[default] " \
-		"#{?session_attached,attached,#[dim]detached#[default]} " \
-		"#[dim]#{window_name}#[default]" \
+		"#[dim]#{session_windows}w#[default] " \
+		"#{?session_attached,#[fg=themegreen]●#[default],#[dim]○#[default]} " \
+		"#[dim]#{t/p:session_activity}#[default] " \
+		"#[dim]#{window_name}#[default] " \
+		"#[dim]#{=|-24|…:pane_current_path}#[default]" \
 	"}"
 
 const struct window_mode window_switch_mode = {

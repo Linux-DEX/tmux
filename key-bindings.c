@@ -93,6 +93,38 @@
 	" 'Bottom' 'b' {move-pane -P bottom-centre}" \
 	" 'Left' 'l' {move-pane -P centre-left}" \
 	" 'Right' 'r' {move-pane -P centre-right}"
+#define DEFAULT_CHEATSHEET_PANES \
+	" 'Focus hjkl' '' {}" \
+	" 'Swap HJKL' '' {}" \
+	" 'Float / tile  @' '@' {if -F '#{pane_floating_flag}' {join-pane} {break-pane -W}}" \
+	" 'New float     *' '*' {new-pane}" \
+	" 'Scratch       u' 'u' {toggle-scratch}" \
+	" 'Zoom          z' 'z' {resize-pane -Z}" \
+	" 'Kill pane     x' 'x' {confirm-before -p\"kill-pane #P? (y/n)\" kill-pane}" \
+	" 'Border cycle  B' 'B' { if -F '#{==:#{pane-border-type},separate}' { set -w pane-border-type separate-active } { if -F '#{==:#{pane-border-type},separate-active}' { set -w pane-border-type joined } { set -w pane-border-type separate } } }"
+#define DEFAULT_CHEATSHEET_SESSIONS \
+	" 'Fuzzy sessions  S / BTab' 'S' {new-pane -E -x80% -y50% -X0 -Y0; move-pane -P bottom-centre; switch-mode -sk}" \
+	" 'Fuzzy windows   Tab' 'Tab' {new-pane -E -x75% -y45% -X0 -Y0; move-pane -P bottom-centre; switch-mode -wk}" \
+	" 'Command palette P' 'P' {new-pane -E -x75% -y45% -X0 -Y0; move-pane -P bottom-centre; switch-mode -Ck}" \
+	" 'Tree sessions   s' 's' {choose-tree -Zs}" \
+	" 'Tree windows    w' 'w' {choose-tree -Zw}"
+#define DEFAULT_CHEATSHEET_LAYOUT \
+	" 'Save layout   C-s' 'C-s' {save-layout}" \
+	" 'Load layout   C-r' 'C-r' {load-layout}" \
+	" 'Upgrade server' '' {upgrade-server}"
+#define DEFAULT_CHEATSHEET_COPY \
+	" 'Copy mode     [' '[' {copy-mode}" \
+	" 'Hint-jump     F' 'F' {copy-mode ; send -X hint ; command-prompt -p'hint:' { send -X hint-select -- '%%' }}" \
+	" 'Hint-open   M-f' 'M-f' {copy-mode ; send -X hint ; command-prompt -p'open:' { send -X hint-select -o -- '%%' }}" \
+	" 'Paste         ]' ']' {paste-buffer -p}"
+#define DEFAULT_CHEATSHEET_MENU \
+	" 'Panes >' 'p' {display-menu -xR -yP -T '#[align=centre]Panes' " DEFAULT_CHEATSHEET_PANES " }" \
+	" 'Sessions >' 's' {display-menu -xR -yP -T '#[align=centre]Sessions' " DEFAULT_CHEATSHEET_SESSIONS " }" \
+	" 'Layout >' 'l' {display-menu -xR -yP -T '#[align=centre]Layout' " DEFAULT_CHEATSHEET_LAYOUT " }" \
+	" 'Copy >' 'c' {display-menu -xR -yP -T '#[align=centre]Copy' " DEFAULT_CHEATSHEET_COPY " }" \
+	" ''" \
+	" 'All annotated keys' '?' {list-keys -N}" \
+	" 'Describe a key' '/' {command-prompt -kpkey { list-keys -1N '%%' }}"
 #define DEFAULT_MOVE_RESIZE_MENU \
 	" 'Fill' '0' {resize-pane -x100% -y100%; move-pane -P top-left}" \
 	" ''" \
@@ -392,9 +424,10 @@ key_bindings_init(void)
 		"bind -N 'Cycle pane border type' B { if -F '#{==:#{pane-border-type},separate}' { set -w pane-border-type separate-active ; display-message 'pane-border-type separate-active' } { if -F '#{==:#{pane-border-type},separate-active}' { set -w pane-border-type joined ; display-message 'pane-border-type joined' } { set -w pane-border-type separate ; display-message 'pane-border-type separate' } } }",
 		"bind -N 'Command palette' P { new-pane -E -x75% -y45% -X0 -Y0; move-pane -P bottom-centre; switch-mode -Ck }",
 		"bind -N 'Toggle floating scratch pane' u { toggle-scratch }",
-		"bind -N 'Save session layouts' C-s { save-layout ; display-message 'layout saved' }",
-		"bind -N 'Load session layouts' C-r { load-layout ; display-message 'layout loaded' }",
-		"bind -N 'Hint-jump URLs and paths' F { copy-mode ; send -X hint ; command-prompt -1p'hint:' { send -X hint-select -- '%%' } }",
+		"bind -N 'Save session layouts' C-s { save-layout }",
+		"bind -N 'Load session layouts' C-r { load-layout }",
+		"bind -N 'Hint-jump URLs and paths' F { copy-mode ; send -X hint ; command-prompt -p'hint:' { send -X hint-select -- '%%' } }",
+		"bind -N 'Hint-jump and open' M-f { copy-mode ; send -X hint ; command-prompt -p'open:' { send -X hint-select -o -- '%%' } }",
 		"bind -N 'Break pane to a new window' ! { break-pane }",
 		"bind -N 'Split window vertically' '\"' { split-window }",
 		"bind -N 'List all paste buffers' '#' { list-buffers }",
@@ -423,7 +456,7 @@ key_bindings_init(void)
 		"bind -N 'Prompt for a command' : { command-prompt }",
 		"bind -N 'Move to the previously active pane' \\; { last-pane }",
 		"bind -N 'Choose a paste buffer from a list' = { choose-buffer -Z }",
-		"bind -N 'List key bindings' ? { list-keys -N }",
+		"bind -N 'Key cheatsheet' ? { display-menu -xR -yP -T '#[align=centre]Linux-DEX keys' " DEFAULT_CHEATSHEET_MENU " }",
 		"bind -N 'Choose and detach a client from a list' D { choose-client -Z }",
 		"bind -N 'Spread panes out evenly' E { select-layout -E }",
 		"bind -N 'Switch to the last client' C-l { switch-client -l }",

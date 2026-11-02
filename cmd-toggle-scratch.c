@@ -24,10 +24,12 @@
 #include "tmux.h"
 
 /*
- * Toggle a modal floating scratch pane in the current window. If a pane titled
- * "scratch" already exists and is active, kill it; if it exists but is inactive,
- * select it; otherwise create a new modal floating scratch over the layout
- * (including above a zoomed pane).
+ * Toggle a floating scratch pane in the current window. If a pane titled
+ * "scratch" already exists and is active, kill it; if it exists but is
+ * inactive, select it; otherwise create a non-modal floating scratch.
+ *
+ * Size presets via -s: small (50%x40%), medium (80%x60%, default),
+ * large (95%x85%).
  */
 
 #define SCRATCH_TITLE "scratch"
@@ -40,8 +42,8 @@ const struct cmd_entry cmd_toggle_scratch_entry = {
 	.description = "Toggle a floating scratch pane.",
 	.alias = NULL,
 
-	.args = { "t:", 0, 0, NULL },
-	.usage = CMD_TARGET_PANE_USAGE,
+	.args = { "s:t:", 0, 0, NULL },
+	.usage = "[-s small|medium|large] " CMD_TARGET_PANE_USAGE,
 
 	.target = { 't', CMD_FIND_PANE, 0 },
 
@@ -62,35 +64,67 @@ cmd_toggle_scratch_find(struct window *w)
 	return (NULL);
 }
 
+static void
+cmd_toggle_scratch_size(const char *preset, const char **sx, const char **sy)
+{
+	if (preset != NULL && strcmp(preset, "small") == 0) {
+		*sx = "50%";
+		*sy = "40%";
+	} else if (preset != NULL && strcmp(preset, "large") == 0) {
+		*sx = "95%";
+		*sy = "85%";
+	} else {
+		*sx = "80%";
+		*sy = "60%";
+	}
+}
+
 static enum cmd_retval
 cmd_toggle_scratch_exec(struct cmd *self, struct cmdq_item *item)
 {
+	struct args		*args = cmd_get_args(self);
 	struct cmd_find_state	*target = cmdq_get_target(item);
 	struct window		*w = target->wl->window;
 	struct window_pane	*wp;
 	struct cmd_parse_result	*pr;
 	struct cmdq_item	*new_item;
 	struct cmdq_state	*state;
+	struct client		*c = cmdq_get_client(item);
+	const char		*preset, *sx, *sy;
+	char			*cmd;
 
 	wp = cmd_toggle_scratch_find(w);
 	if (wp != NULL) {
 		if (wp == w->active) {
 			server_kill_pane(wp);
+			if (c != NULL)
+				status_message_set(c, -1, 1, 0, 0,
+				    "scratch closed");
 			return (CMD_RETURN_NORMAL);
 		}
 		window_set_active_pane(w, wp, 1);
 		server_redraw_window(w);
+		if (c != NULL)
+			status_message_set(c, -1, 1, 0, 0, "scratch focused");
 		return (CMD_RETURN_NORMAL);
 	}
+
+	preset = args_get(args, 's');
+	cmd_toggle_scratch_size(preset, &sx, &sy);
 
 	/*
 	 * Non-modal float on purpose: modal panes block select-pane to the
 	 * tiled layout, so Prefix+u could not bring an existing scratch back
-	 * to focus. Esc-to-dismiss remains available via a second toggle.
+	 * to focus. Yellow SCRATCH chrome comes from pane-border-format /
+	 * pane-active-border-style defaults.
 	 */
-	pr = cmd_parse_from_string(
-	    "new-pane -A -x80% -y60% -c '#{pane_current_path}' "
-	    "-T " SCRATCH_TITLE " ; move-pane -P centre", NULL);
+	xasprintf(&cmd,
+	    "new-pane -A -x%s -y%s -c '#{pane_current_path}' "
+	    "-T " SCRATCH_TITLE " ; move-pane -P centre ; "
+	    "display-message 'scratch (%s)'", sx, sy,
+	    preset != NULL ? preset : "medium");
+	pr = cmd_parse_from_string(cmd, NULL);
+	free(cmd);
 	if (pr->status == CMD_PARSE_ERROR) {
 		cmdq_error(item, "%s", pr->error);
 		free(pr->error);

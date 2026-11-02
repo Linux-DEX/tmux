@@ -1195,7 +1195,9 @@ const struct options_table_entry options_table[] = {
 	{ .name = "status-left",
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_SESSION,
-	  .default_str = "[#{session_name}] ",
+	  .default_str = "#[bold]DEX#[nobold] #{session_name} "
+			 "#{?#{window_zoomed_flag},#[fg=themeyellow]Z #[default],}"
+			 "#{?#{pane_floating_flag},#[fg=themecyan]float #[default],}",
 	  .text = "Contents of the left side of the status line."
 	},
 
@@ -1204,7 +1206,7 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .minimum = 0,
 	  .maximum = SHRT_MAX,
-	  .default_num = 10,
+	  .default_num = 40,
 	  .text = "Maximum width of the left side of the status line."
 	},
 
@@ -1230,7 +1232,12 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .default_str = "#{?window_bigger,"
 			 "[#{window_offset_x}#,#{window_offset_y}] ,}"
-			 "\"#{=21:pane_title}\" %H:%M %d-%b-%y",
+			 "#{?pane_in_mode,"
+			 "#[fg=themeyellow]#{pane_mode}#[default] ,}"
+			 "#{?#{==:#{pane_title},scratch},"
+			 "#[fg=themeyellow]scratch#[default] ,}"
+			 "#{=|-24|…:pane_current_path} "
+			 "#[dim]#{host_short}#[default] %H:%M",
 	  .text = "Contents of the right side of the status line."
 
 	},
@@ -1240,7 +1247,7 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .minimum = 0,
 	  .maximum = SHRT_MAX,
-	  .default_num = 40,
+	  .default_num = 80,
 	  .text = "Maximum width of the right side of the status line."
 	},
 
@@ -1537,6 +1544,11 @@ const struct options_table_entry options_table[] = {
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE,
 	  .default_str = "#[align=right]"
+			 "#{?hint_active,"
+			 "#[fg=themeblack,bg=themeyellow bold]"
+			 " HINT #{hint_count} — type label "
+			 "#[default] ,"
+			 "}"
 			 "#{t/p:top_line_time}#{?#{e|>:#{top_line_time},0}, ,}"
 			 "[#{copy_position}/#{copy_position_limit}]"
 			 "#{?search_timed_out, (timed out),"
@@ -1696,7 +1708,9 @@ const struct options_table_entry options_table[] = {
 	  .default_str = "fg=#{?pane_modal_flag,themeblue,"
 			 "#{?pane_marked,thememagenta,"
 			 "#{?synchronize-panes,themered,"
-			 "#{?pane_in_mode,themeyellow,themegreen}}}}",
+			 "#{?#{==:#{pane_title},scratch},themeyellow,"
+			 "#{?pane_floating_flag,themecyan,"
+			 "#{?pane_in_mode,themeyellow,themegreen}}}}}}",
 	  .flags = OPTIONS_TABLE_IS_STYLE,
 	  .separator = ",",
 	  .text = "Style of the active pane border."
@@ -1715,7 +1729,13 @@ const struct options_table_entry options_table[] = {
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE,
 	  .default_str = "#{?pane_active,#[reverse],}#{pane_index}#[default] "
-			 "\"#{pane_title}\""
+			 "#{?#{==:#{pane_title},scratch},"
+				"#[fg=themeyellow bold]SCRATCH#[default] ,"
+			 "#{?pane_floating_flag,"
+				"#[fg=themecyan]float#[default] ,}"
+			 "}"
+			 "\"#{pane_title}\" "
+			 "#[dim]#{=|-20|…:pane_current_path}#[default]"
 			 "#{?#{mouse},"
 				"#[align=right]"
 				"#[range=control|7]["

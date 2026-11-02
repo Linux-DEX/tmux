@@ -53,6 +53,9 @@ const struct cmd_entry cmd_save_layout_entry = {
 struct cmd_save_layout_data {
 	struct cmdq_item	*item;
 	char			*path;
+	u_int			 nsessions;
+	u_int			 nwindows;
+	u_int			 npanes;
 };
 
 /* Escape a string for embedding in a JSON string literal. */
@@ -124,7 +127,12 @@ cmd_save_layout_done(__unused struct client *c, const char *path, int error,
 	if (error != 0)
 		cmdq_error(item, "%s: %s", path, strerror(error));
 	else
-		cmdq_print(item, "saved layout to %s", path);
+		cmdq_print(item,
+		    "saved %u session%s / %u window%s / %u pane%s to %s",
+		    cdata->nsessions, cdata->nsessions == 1 ? "" : "s",
+		    cdata->nwindows, cdata->nwindows == 1 ? "" : "s",
+		    cdata->npanes, cdata->npanes == 1 ? "" : "s",
+		    path);
 	cmdq_continue(item);
 
 	free(cdata->path);
@@ -169,11 +177,16 @@ cmd_save_layout_exec(struct cmd *self, struct cmdq_item *item)
 	    "{\"version\":1,\"generated\":\"%s\",\"tmux_version\":\"%s\","
 	    "\"sessions\":[", tbuf, getversion());
 
+	cdata = xcalloc(1, sizeof *cdata);
+	cdata->item = item;
+	cdata->path = xstrdup(path);
+
 	first_session = 1;
 	RB_FOREACH(s, sessions, &sessions) {
 		if (!first_session)
 			evbuffer_add(evb, ",", 1);
 		first_session = 0;
+		cdata->nsessions++;
 
 		name_esc = cmd_save_layout_json_escape(s->name);
 		evbuffer_add_printf(evb,
@@ -188,6 +201,7 @@ cmd_save_layout_exec(struct cmd *self, struct cmdq_item *item)
 			if (!first_window)
 				evbuffer_add(evb, ",", 1);
 			first_window = 0;
+			cdata->nwindows++;
 
 			name_esc = cmd_save_layout_json_escape(w->name);
 			evbuffer_add_printf(evb, "{\"index\":%u,\"name\":"
@@ -207,6 +221,7 @@ cmd_save_layout_exec(struct cmd *self, struct cmdq_item *item)
 				if (!first_pane)
 					evbuffer_add(evb, ",", 1);
 				first_pane = 0;
+				cdata->npanes++;
 
 				window_pane_index(wp, &pane_index);
 				cwd = cmd_save_layout_pane_cwd(wp);
@@ -226,10 +241,6 @@ cmd_save_layout_exec(struct cmd *self, struct cmdq_item *item)
 
 	data = evbuffer_pullup(evb, -1);
 	size = evbuffer_get_length(evb);
-
-	cdata = xcalloc(1, sizeof *cdata);
-	cdata->item = item;
-	cdata->path = xstrdup(path);
 
 	file_write(cmdq_get_client(item), path, O_TRUNC, data, size,
 	    cmd_save_layout_done, cdata);

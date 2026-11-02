@@ -8,12 +8,16 @@ This is the Linux-DEX fork of next-3.9. Flagship differences from upstream:
 
 	* pane-border-type defaults to separate (full border around each pane);
 	  Prefix+B cycles separate → separate-active → joined
+	* status line branded "DEX" with path/host/mode cues; active borders
+	  tint for scratch (yellow), floating (cyan), copy-mode (yellow)
+	* Prefix+? opens a grouped key cheatsheet (which-key style)
 	* Prefix+P opens a fuzzy command palette (switch-mode -C)
 	* Prefix+h/j/k/l focus panes; Prefix+H/J/K/L swap with neighbors
-	* Prefix+u toggles a modal floating scratch pane
-	* Prefix+F hint-jumps URLs/paths/hashes in copy mode (fingers-like)
+	* Prefix+u toggles a floating scratch pane (non-modal; -s size preset)
+	* Prefix+F hint-jumps URLs/paths/hashes; Prefix+M-f opens the match
 	* Prefix+S / BTab fuzzy session picker; Tab fuzzy window picker
 	* save-layout / load-layout persist session shapes + pane cwds
+	  (messages report session/window/pane counts)
 	* upgrade-server saves layouts, stops the server, autoloads on restart
 	  (pane processes exit; true PTY-preserving live-exec is not claimed)
 	* one-command install.sh (see below)

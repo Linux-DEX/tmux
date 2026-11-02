@@ -401,12 +401,16 @@ struct window_copy_mode_data {
 	int		 refresh_active;
 };
 
-/* Home-row first, then remaining letters/digits — fingers-style labels. */
+/* Home-row alphabet for labels; two-char labels when more than 26 matches. */
 #define WINDOW_COPY_HINT_KEYS \
-	"asdfqwerzxcvjklmiopghtybnmASDFQWERZXCVJKLMIOPGHTYBNM1234567890"
+	"asdfqwerzxcvjklmiopghtybnm"
 #define WINDOW_COPY_HINT_REGEX \
 	"https?://[^[:space:]]+|(/[[:alnum:]_./~+-]+)|" \
 	"[0-9a-fA-F]{7,40}"
+#define WINDOW_COPY_HINT_MAX_ONE \
+	((u_int)(sizeof WINDOW_COPY_HINT_KEYS - 1))
+#define WINDOW_COPY_HINT_MAX_TWO \
+	(WINDOW_COPY_HINT_MAX_ONE * WINDOW_COPY_HINT_MAX_ONE)
 
 static void
 window_copy_scroll_timer(__unused int fd, __unused short events, void *arg)
@@ -1239,6 +1243,9 @@ window_copy_formats(struct window_mode_entry *wme, struct format_tree *ft)
 			    data->searchindex);
 	}
 	format_add_cb(ft, "search_match", window_copy_search_match_cb);
+
+	format_add(ft, "hint_active", "%d", data->hint_active);
+	format_add(ft, "hint_count", "%u", data->hint_count);
 
 	format_add_cb(ft, "copy_cursor_word", window_copy_cursor_word_cb);
 	format_add_cb(ft, "copy_cursor_line", window_copy_cursor_line_cb);
@@ -3616,6 +3623,28 @@ window_copy_hint_match_at(struct window_copy_mode_data *data, u_int idx)
 	return ((u_int)-1);
 }
 
+/* Fill label for match idx; returns number of characters (1 or 2). */
+static int
+window_copy_hint_make_label(u_int idx, u_int count, char *label)
+{
+	const char	*keys = WINDOW_COPY_HINT_KEYS;
+	u_int		 nkeys = WINDOW_COPY_HINT_MAX_ONE;
+
+	if (count <= nkeys) {
+		if (idx >= nkeys)
+			return (0);
+		label[0] = keys[idx];
+		label[1] = '\0';
+		return (1);
+	}
+	if (idx >= WINDOW_COPY_HINT_MAX_TWO)
+		return (0);
+	label[0] = keys[idx / nkeys];
+	label[1] = keys[idx % nkeys];
+	label[2] = '\0';
+	return (2);
+}
+
 static int
 window_copy_hint_label_at(struct window_copy_mode_data *data, u_int fx,
     u_int fy, char *label)
@@ -3641,17 +3670,55 @@ window_copy_hint_label_at(struct window_copy_mode_data *data, u_int fx,
 	for (start = 0; start < last; start++) {
 		mark = data->searchmark[start];
 		if (mark != 0 && mark != prev) {
-			if (start == at) {
-				if (idx >= sizeof WINDOW_COPY_HINT_KEYS - 1)
-					return (0);
-				*label = WINDOW_COPY_HINT_KEYS[idx];
-				return (1);
-			}
+			if (start == at)
+				return (window_copy_hint_make_label(idx,
+				    data->hint_count, label));
 			idx++;
 		}
 		prev = mark;
 	}
 	return (0);
+}
+
+static u_int
+window_copy_hint_index_for_label(struct window_copy_mode_data *data,
+    const char *arg)
+{
+	char	label[3];
+	u_int	idx;
+	int	n;
+
+	for (idx = 0; idx < data->hint_count; idx++) {
+		n = window_copy_hint_make_label(idx, data->hint_count, label);
+		if (n > 0 && strcmp(label, arg) == 0)
+			return (idx);
+	}
+	return ((u_int)-1);
+}
+
+static void
+window_copy_hint_open(struct client *c, char *text)
+{
+	char		*argv[3];
+	const char	*bin;
+
+	if (c == NULL || text == NULL || *text == '\0')
+		return;
+	if (strncmp(text, "http://", 7) == 0 ||
+	    strncmp(text, "https://", 8) == 0) {
+#ifdef __APPLE__
+		bin = "open";
+#else
+		bin = "xdg-open";
+#endif
+		argv[0] = (char *)bin;
+		argv[1] = text;
+		argv[2] = NULL;
+		job_run(NULL, 2, argv, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+		    JOB_NOWAIT, -1, -1);
+		return;
+	}
+	spawn_editor(c, text, strlen(text), NULL, window_copy_open_done, NULL);
 }
 
 static enum window_copy_cmd_action
@@ -3679,7 +3746,7 @@ window_copy_cmd_hint(struct window_copy_cmd_state *cs)
 
 	window_copy_search_marks(wme, NULL, 1, 1);
 	n = window_copy_hint_count_matches(data);
-	max = sizeof WINDOW_COPY_HINT_KEYS - 1;
+	max = WINDOW_COPY_HINT_MAX_TWO;
 	if (n > max)
 		n = max;
 	data->hint_active = (n != 0);
@@ -3688,10 +3755,12 @@ window_copy_cmd_hint(struct window_copy_cmd_state *cs)
 	if (c != NULL) {
 		if (n == 0)
 			status_message_set(c, -1, 1, 0, 0, "no hint matches");
+		else if (n <= WINDOW_COPY_HINT_MAX_ONE)
+			status_message_set(c, -1, 1, 0, 0,
+			    "hint: %u — type label (Enter)", n);
 		else
 			status_message_set(c, -1, 1, 0, 0,
-			    "hint: %u match%s — type label to copy",
-			    n, n == 1 ? "" : "es");
+			    "hint: %u — type 2-char label (Enter)", n);
 	}
 	return (WINDOW_COPY_CMD_REDRAW);
 }
@@ -3702,12 +3771,11 @@ window_copy_cmd_hint_select(struct window_copy_cmd_state *cs)
 	struct window_mode_entry	*wme = cs->wme;
 	struct window_copy_mode_data	*data = wme->data;
 	struct client			*c = cs->c;
-	struct session			*s = cs->s;
-	const char			*arg, *keys = WINDOW_COPY_HINT_KEYS;
-	const char			*kp;
-	char				*text = NULL, *cause = NULL;
+	const char			*arg;
+	char				*text = NULL, *cause = NULL, *open_copy;
 	u_int				 idx, at, sx, px, py, hsize;
 	size_t				 len;
+	int				 do_open = args_has(cs->wargs, 'o');
 
 	if (!data->hint_active || data->searchmark == NULL) {
 		if (c != NULL)
@@ -3718,17 +3786,11 @@ window_copy_cmd_hint_select(struct window_copy_cmd_state *cs)
 	arg = args_string(cs->wargs, 0);
 	if (arg == NULL || arg[0] == '\0')
 		return (WINDOW_COPY_CMD_NOTHING);
-	kp = strchr(keys, arg[0]);
-	if (kp == NULL) {
+	idx = window_copy_hint_index_for_label(data, arg);
+	if (idx == (u_int)-1) {
 		if (c != NULL)
-			status_message_set(c, -1, 1, 0, 0, "unknown hint: %c",
-			    arg[0]);
-		return (WINDOW_COPY_CMD_NOTHING);
-	}
-	idx = (u_int)(kp - keys);
-	if (idx >= data->hint_count) {
-		if (c != NULL)
-			status_message_set(c, -1, 1, 0, 0, "hint out of range");
+			status_message_set(c, -1, 1, 0, 0, "unknown hint: %s",
+			    arg);
 		return (WINDOW_COPY_CMD_NOTHING);
 	}
 
@@ -3781,18 +3843,27 @@ window_copy_cmd_hint_select(struct window_copy_cmd_state *cs)
 		return (WINDOW_COPY_CMD_REDRAW);
 	}
 	len = strlen(text);
-	/* paste_set takes ownership of text on success (and on size==0). */
-	if (paste_set(text, len, NULL, &cause) != 0) {
+
+	if (do_open) {
+		open_copy = xstrdup(text);
+		window_copy_hint_open(c, open_copy);
+		free(open_copy);
 		if (c != NULL)
-			status_message_set(c, -1, 1, 0, 0, "%s",
-			    cause != NULL ? cause : "paste failed");
-		free(cause);
+			status_message_set(c, -1, 1, 0, 0, "opened hint match");
 		free(text);
-		return (WINDOW_COPY_CMD_REDRAW);
+	} else {
+		/* paste_set takes ownership of text on success (and on size==0). */
+		if (paste_set(text, len, NULL, &cause) != 0) {
+			if (c != NULL)
+				status_message_set(c, -1, 1, 0, 0, "%s",
+				    cause != NULL ? cause : "paste failed");
+			free(cause);
+			free(text);
+			return (WINDOW_COPY_CMD_REDRAW);
+		}
+		if (c != NULL)
+			status_message_set(c, -1, 1, 0, 0, "copied hint match");
 	}
-	if (c != NULL)
-		status_message_set(c, -1, 1, 0, 0, "copied hint match");
-	(void)s;
 
 	data->hint_active = 0;
 	data->hint_count = 0;
@@ -3822,7 +3893,7 @@ static const struct {
 	  .f = window_copy_cmd_hint
 	},
 	{ .command = "hint-select",
-	  .args = { "", 1, 1, NULL },
+	  .args = { "o", 1, 1, NULL },
 	  .flags = WINDOW_COPY_CMD_FLAG_READONLY,
 	  .clear = WINDOW_COPY_CMD_CLEAR_NEVER,
 	  .f = window_copy_cmd_hint_select
@@ -5938,12 +6009,24 @@ window_copy_write_one(struct window_mode_entry *wme,
 			window_copy_update_style(wme, fx, fy, &gc, mgc, cgc,
 			    mkgc, clgc);
 			if (data->hint_active) {
-				char	 label;
+				char	 label[3];
+				int	 nlabel;
 
-				if (window_copy_hint_label_at(data, fx, fy,
-				    &label)) {
-					gc.attr |= GRID_ATTR_REVERSE;
-					utf8_set(&gc.data, label);
+				nlabel = window_copy_hint_label_at(data, fx, fy,
+				    label);
+				if (nlabel > 0) {
+					gc.attr |= GRID_ATTR_BRIGHT |
+					    GRID_ATTR_REVERSE;
+					gc.fg = 16;	/* black */
+					gc.bg = 3;	/* yellow */
+					utf8_set(&gc.data, label[0]);
+					screen_write_cell(ctx, &gc);
+					if (nlabel > 1 && fx + 1 < nx) {
+						fx++;
+						utf8_set(&gc.data, label[1]);
+						screen_write_cell(ctx, &gc);
+					}
+					continue;
 				}
 			}
 			if (gc.flags & GRID_FLAG_PADDING) {

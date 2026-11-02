@@ -238,18 +238,27 @@ cmd_load_layout_done(__unused struct client *c, const char *path, int error,
 		goto done;
 	}
 
-	for (sess = json_array_first(sess_array); sess != NULL;
-	    sess = json_array_next(sess)) {
-		cause = NULL;
-		if (cmd_load_layout_build_session(item, sess, &cause) != 0) {
-			cfg_add_cause("%s: %s", path, cause);
-			free(cause);
-			any_causes = 1;
+	{
+		u_int	nsessions = 0;
+
+		for (sess = json_array_first(sess_array); sess != NULL;
+		    sess = json_array_next(sess)) {
+			cause = NULL;
+			if (cmd_load_layout_build_session(item, sess,
+			    &cause) != 0) {
+				cfg_add_cause("%s: %s", path, cause);
+				free(cause);
+				any_causes = 1;
+			} else
+				nsessions++;
 		}
+		json_destroy_node(root);
+		if (any_causes)
+			cfg_print_causes(item);
+		else
+			cmdq_print(item, "loaded %u session%s from %s",
+			    nsessions, nsessions == 1 ? "" : "s", path);
 	}
-	json_destroy_node(root);
-	if (any_causes)
-		cfg_print_causes(item);
 
 done:
 	cmdq_continue(item);
