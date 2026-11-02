@@ -58,7 +58,8 @@ cmd_toggle_scratch_find(struct window *w)
 
 	TAILQ_FOREACH(wp, &w->panes, entry) {
 		if (wp->base.title != NULL &&
-		    strcmp(wp->base.title, SCRATCH_TITLE) == 0)
+		    strcmp(wp->base.title, SCRATCH_TITLE) == 0 &&
+		    window_pane_is_floating(wp))
 			return (wp);
 	}
 	return (NULL);

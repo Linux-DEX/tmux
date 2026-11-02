@@ -3697,28 +3697,30 @@ window_copy_hint_index_for_label(struct window_copy_mode_data *data,
 }
 
 static void
-window_copy_hint_open(struct client *c, char *text)
+window_copy_hint_open_free(void *data)
 {
-	char		*argv[3];
+	cmd_free_argv(2, data);
+}
+
+static void
+window_copy_hint_open(__unused struct client *c, char *text)
+{
+	char		*tmp[2], **argv;
 	const char	*bin;
 
-	if (c == NULL || text == NULL || *text == '\0')
+	if (text == NULL || *text == '\0')
 		return;
-	if (strncmp(text, "http://", 7) == 0 ||
-	    strncmp(text, "https://", 8) == 0) {
 #ifdef __APPLE__
-		bin = "open";
+	bin = "open";
 #else
-		bin = "xdg-open";
+	bin = "xdg-open";
 #endif
-		argv[0] = (char *)bin;
-		argv[1] = text;
-		argv[2] = NULL;
-		job_run(NULL, 2, argv, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-		    JOB_NOWAIT, -1, -1);
-		return;
-	}
-	spawn_editor(c, text, strlen(text), NULL, window_copy_open_done, NULL);
+	tmp[0] = (char *)bin;
+	tmp[1] = text;
+	argv = cmd_copy_argv(2, tmp);
+	if (job_run(NULL, 2, argv, NULL, NULL, NULL, NULL, NULL,
+	    window_copy_hint_open_free, argv, JOB_NOWAIT, -1, -1) == NULL)
+		cmd_free_argv(2, argv);
 }
 
 static enum window_copy_cmd_action
@@ -3747,20 +3749,23 @@ window_copy_cmd_hint(struct window_copy_cmd_state *cs)
 	window_copy_search_marks(wme, NULL, 1, 1);
 	n = window_copy_hint_count_matches(data);
 	max = WINDOW_COPY_HINT_MAX_TWO;
-	if (n > max)
-		n = max;
-	data->hint_active = (n != 0);
-	data->hint_count = n;
+	data->hint_count = (n > max) ? max : n;
+	data->hint_active = (data->hint_count != 0);
 
 	if (c != NULL) {
-		if (n == 0)
+		if (data->hint_count == 0)
 			status_message_set(c, -1, 1, 0, 0, "no hint matches");
-		else if (n <= WINDOW_COPY_HINT_MAX_ONE)
+		else if (n > max)
 			status_message_set(c, -1, 1, 0, 0,
-			    "hint: %u — type label (Enter)", n);
+			    "hint: %u of %u — type 2-char label (Enter)",
+			    data->hint_count, n);
+		else if (data->hint_count <= WINDOW_COPY_HINT_MAX_ONE)
+			status_message_set(c, -1, 1, 0, 0,
+			    "hint: %u — type label (Enter)", data->hint_count);
 		else
 			status_message_set(c, -1, 1, 0, 0,
-			    "hint: %u — type 2-char label (Enter)", n);
+			    "hint: %u — type 2-char label (Enter)",
+			    data->hint_count);
 	}
 	return (WINDOW_COPY_CMD_REDRAW);
 }

@@ -191,7 +191,16 @@ cmd_load_layout_build_session(struct cmdq_item *item, struct json_node *sess,
 		first_window = 0;
 	}
 
-	session_select(s, (int)current_window);
+	if (session_select(s, (int)current_window) == -1) {
+		struct winlink	*wl = RB_MIN(winlinks, &s->windows);
+
+		if (wl == NULL || session_set_current(s, wl) == -1) {
+			xasprintf(cause, "session \"%s\" could not select a "
+			    "window", name);
+			session_destroy(s, 0, __func__);
+			return (-1);
+		}
+	}
 	events_fire_session("session-created", s);
 	return (0);
 }

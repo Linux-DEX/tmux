@@ -88,7 +88,12 @@ layout_maybe_autoload(void)
 	unlink(marker);
 	free(marker);
 
-	xasprintf(&cmd, "load-layout -f %s", layout_path);
+	{
+		char	*escaped = args_escape(layout_path);
+
+		xasprintf(&cmd, "load-layout -f %s", escaped);
+		free(escaped);
+	}
 	pr = cmd_parse_from_string(cmd, NULL);
 	free(cmd);
 	free(layout_path);

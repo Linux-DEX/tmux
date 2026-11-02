@@ -764,7 +764,7 @@ key_bindings_init(void)
 		"bind -Tcopy-mode-vi b { send -X previous-word }",
 		"bind -Tcopy-mode-vi e { send -X next-word-end }",
 		"bind -Tcopy-mode-vi f { command-prompt -P -1p'(jump forward)' { send -X jump-forward -- '%%' } }",
-		"bind -Tcopy-mode-vi Y { send -X hint ; command-prompt -1p'hint:' { send -X hint-select -- '%%' } }",
+		"bind -Tcopy-mode-vi Y { send -X hint ; command-prompt -p'hint:' { send -X hint-select -- '%%' } }",
 		"bind -Tcopy-mode-vi g { send -X history-top }",
 		"bind -Tcopy-mode-vi h { send -X cursor-left }",
 		"bind -Tcopy-mode-vi j { send -X cursor-down }",

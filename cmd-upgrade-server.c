@@ -28,6 +28,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 #include "tmux.h"
 
 /*
@@ -62,13 +66,23 @@ static char *
 cmd_upgrade_server_self_path(void)
 {
 	char	 buf[PATH_MAX];
-	ssize_t	 n;
 
 #ifdef __linux__
-	n = readlink("/proc/self/exe", buf, sizeof buf - 1);
-	if (n > 0) {
-		buf[n] = '\0';
-		return (xstrdup(buf));
+	{
+		ssize_t	 n;
+
+		n = readlink("/proc/self/exe", buf, sizeof buf - 1);
+		if (n > 0) {
+			buf[n] = '\0';
+			return (xstrdup(buf));
+		}
+	}
+#elif defined(__APPLE__)
+	{
+		uint32_t	 size = sizeof buf;
+
+		if (_NSGetExecutablePath(buf, &size) == 0)
+			return (xstrdup(buf));
 	}
 #endif
 	return (xstrdup(getprogname()));
@@ -78,7 +92,7 @@ static int
 cmd_upgrade_server_check_binary(const char *path, char **cause)
 {
 	pid_t	 pid;
-	int	 status;
+	int	 status, nullfd;
 	char	*argv[3];
 
 	argv[0] = (char *)path;
@@ -90,10 +104,13 @@ cmd_upgrade_server_check_binary(const char *path, char **cause)
 		xasprintf(cause, "fork failed: %s", strerror(errno));
 		return (-1);
 	case 0:
-		if (dup2(open("/dev/null", O_RDWR), STDOUT_FILENO) == -1)
+		nullfd = open(_PATH_DEVNULL, O_RDWR);
+		if (nullfd == -1 || dup2(nullfd, STDOUT_FILENO) == -1)
 			_exit(127);
 		if (dup2(STDOUT_FILENO, STDERR_FILENO) == -1)
 			_exit(127);
+		if (nullfd > STDERR_FILENO)
+			close(nullfd);
 		execv(path, argv);
 		_exit(127);
 	default:
@@ -133,24 +150,50 @@ cmd_upgrade_server_queue(struct cmdq_item *after, const char *command,
 	return (new_item);
 }
 
+/* After save-layout: write autoload marker then stop the server. */
+static enum cmd_retval
+cmd_upgrade_server_stop(struct cmdq_item *item, void *data)
+{
+	char	*layout_path = data, *marker;
+	int	 fd;
+
+	xasprintf(&marker, "%s.autoload", layout_path);
+	fd = open(marker, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+	if (fd == -1) {
+		cmdq_error(item, "%s: %s", marker, strerror(errno));
+		free(marker);
+		free(layout_path);
+		return (CMD_RETURN_ERROR);
+	}
+	close(fd);
+	free(marker);
+	free(layout_path);
+
+	kill(getpid(), SIGTERM);
+	return (CMD_RETURN_NORMAL);
+}
+
 static enum cmd_retval
 cmd_upgrade_server_exec(struct cmd *self, struct cmdq_item *item)
 {
 	struct args		*args = cmd_get_args(self);
 	const char		*bin;
 	char			*freeme = NULL, *layout_path = NULL;
-	char			*cause = NULL, *cmd = NULL;
+	char			*cause = NULL, *cmd = NULL, *escaped = NULL;
 	struct cmdq_item	*save_item, *stop_item;
 	struct session		*s;
 	u_int			 n = 0;
 
+	RB_FOREACH(s, sessions, &sessions)
+		n++;
+	if (n == 0) {
+		cmdq_error(item, "no sessions to upgrade");
+		return (CMD_RETURN_ERROR);
+	}
 	if (!args_has(args, 'y')) {
-		RB_FOREACH(s, sessions, &sessions)
-			n++;
-		if (n == 0) {
-			cmdq_error(item, "no sessions to upgrade");
-			return (CMD_RETURN_ERROR);
-		}
+		cmdq_error(item, "pane processes will exit; re-run with -y "
+		    "to confirm");
+		return (CMD_RETURN_ERROR);
 	}
 
 	if ((bin = args_get(args, 'f')) == NULL)
@@ -174,7 +217,9 @@ cmd_upgrade_server_exec(struct cmd *self, struct cmdq_item *item)
 		return (CMD_RETURN_ERROR);
 	}
 
-	xasprintf(&cmd, "save-layout -f %s", layout_path);
+	escaped = args_escape(layout_path);
+	xasprintf(&cmd, "save-layout -f %s", escaped);
+	free(escaped);
 	save_item = cmd_upgrade_server_queue(item, cmd, &cause);
 	free(cmd);
 	if (save_item == NULL) {
@@ -186,22 +231,12 @@ cmd_upgrade_server_exec(struct cmd *self, struct cmdq_item *item)
 	}
 
 	/*
-	 * After save-layout completes, drop the autoload marker and stop the
-	 * server. run-shell -b is intentional so SIGTERM is not blocked by the
-	 * command queue waiting on itself.
+	 * After save-layout completes, write the autoload marker in-process
+	 * and SIGTERM the server (avoids shell-quoting the layout path).
 	 */
-	xasprintf(&cmd,
-	    "run-shell -b \"printf '' > %s.autoload && kill -TERM %ld\"",
-	    layout_path, (long)getpid());
-	stop_item = cmd_upgrade_server_queue(save_item, cmd, &cause);
-	free(cmd);
-	if (stop_item == NULL) {
-		cmdq_error(item, "%s", cause);
-		free(cause);
-		free(layout_path);
-		free(freeme);
-		return (CMD_RETURN_ERROR);
-	}
+	stop_item = cmdq_get_callback(cmd_upgrade_server_stop, layout_path);
+	cmdq_insert_after(save_item, stop_item);
+	layout_path = NULL;
 
 	cmdq_print(item,
 	    "upgrade-server: saving layouts then stopping server "
@@ -209,7 +244,6 @@ cmd_upgrade_server_exec(struct cmd *self, struct cmdq_item *item)
 	    "Note: processes inside panes will exit.",
 	    bin);
 
-	free(layout_path);
 	free(freeme);
 	return (CMD_RETURN_NORMAL);
 }
