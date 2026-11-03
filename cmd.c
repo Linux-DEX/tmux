@@ -118,7 +118,9 @@ extern const struct cmd_entry cmd_swap_pane_entry;
 extern const struct cmd_entry cmd_swap_window_entry;
 extern const struct cmd_entry cmd_switch_client_entry;
 extern const struct cmd_entry cmd_switch_mode_entry;
+extern const struct cmd_entry cmd_toggle_float_layer_entry;
 extern const struct cmd_entry cmd_toggle_scratch_entry;
+extern const struct cmd_entry cmd_pin_pane_entry;
 extern const struct cmd_entry cmd_unbind_key_entry;
 extern const struct cmd_entry cmd_unlink_window_entry;
 extern const struct cmd_entry cmd_upgrade_server_entry;
@@ -176,6 +178,7 @@ const struct cmd_entry *cmd_table[] = {
 	&cmd_next_layout_entry,
 	&cmd_next_window_entry,
 	&cmd_paste_buffer_entry,
+	&cmd_pin_pane_entry,
 	&cmd_pipe_pane_entry,
 	&cmd_previous_layout_entry,
 	&cmd_previous_window_entry,
@@ -216,6 +219,7 @@ const struct cmd_entry *cmd_table[] = {
 	&cmd_swap_window_entry,
 	&cmd_switch_client_entry,
 	&cmd_switch_mode_entry,
+	&cmd_toggle_float_layer_entry,
 	&cmd_toggle_scratch_entry,
 	&cmd_unbind_key_entry,
 	&cmd_unlink_window_entry,

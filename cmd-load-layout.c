@@ -27,8 +27,9 @@
 
 /*
  * Recreate the session/window/pane layout previously written by
- * 'save-layout'. Starts a fresh shell in each pane at the recorded working
- * directory; does not relaunch whatever was actually running there before.
+ * 'save-layout'. Version 2 files may include per-pane commands and titles.
+ * Restore mode comes from layout-restore-commands (prompt|auto|off); -y
+ * forces auto for this invocation.
  */
 
 static enum cmd_retval cmd_load_layout_exec(struct cmd *, struct cmdq_item *);
@@ -38,8 +39,8 @@ const struct cmd_entry cmd_load_layout_entry = {
 	.description = "Load session layouts from a file.",
 	.alias = NULL,
 
-	.args = { "f:", 0, 0, NULL },
-	.usage = "[-f path]",
+	.args = { "f:y", 0, 0, NULL },
+	.usage = "[-y] [-f path]",
 
 	.flags = CMD_STARTSERVER,
 	.exec = cmd_load_layout_exec
@@ -48,21 +49,73 @@ const struct cmd_entry cmd_load_layout_entry = {
 struct cmd_load_layout_data {
 	struct cmdq_item	*item;
 	char			*path;
+	int			 force_auto;
 };
+
+static void
+cmd_load_layout_free_argv(char **argv, int argc)
+{
+	int	i;
+
+	if (argv == NULL)
+		return;
+	for (i = 0; i < argc; i++)
+		free(argv[i]);
+	free(argv);
+}
+
+static int
+cmd_load_layout_build_argv(const char *command, int mode, char ***argv,
+    int *argc)
+{
+	char	*script;
+
+	*argv = NULL;
+	*argc = 0;
+	if (command == NULL || *command == '\0' || mode == LAYOUT_RESTORE_OFF)
+		return (0);
+
+	if (mode == LAYOUT_RESTORE_AUTO) {
+		*argc = 3;
+		*argv = xcalloc(4, sizeof **argv);
+		(*argv)[0] = xstrdup("sh");
+		(*argv)[1] = xstrdup("-c");
+		(*argv)[2] = xstrdup(command);
+		return (0);
+	}
+
+	/* prompt: wait for Enter, then eval the saved command. */
+	script = xstrdup(
+	    "printf 'Press Enter to run:\\n  %s\\n' \"$1\"; "
+	    "read _ || exit 0; eval \"$1\"");
+	*argc = 5;
+	*argv = xcalloc(6, sizeof **argv);
+	(*argv)[0] = xstrdup("sh");
+	(*argv)[1] = xstrdup("-c");
+	(*argv)[2] = script;
+	(*argv)[3] = xstrdup("_");
+	(*argv)[4] = xstrdup(command);
+	return (0);
+}
 
 static int
 cmd_load_layout_add_pane(struct cmdq_item *item, struct winlink *wl,
-    const char *cwd, char **cause)
+    const char *cwd, const char *command, const char *title, int mode,
+    char **cause)
 {
-	struct window_pane	*wp0;
+	struct window_pane	*wp0, *wp;
 	struct layout_cell	*lc;
 	struct spawn_context	 sc;
+	char			**argv = NULL;
+	int			 argc = 0;
 
 	wp0 = TAILQ_LAST(&wl->window->panes, window_panes);
 	if ((lc = layout_split_pane(wp0, LAYOUT_TOPBOTTOM, -1, 0)) == NULL) {
 		xasprintf(cause, "no space for pane in window %d", wl->idx);
 		return (-1);
 	}
+
+	cmd_load_layout_build_argv(command, mode, &argv, &argc);
 
 	memset(&sc, 0, sizeof sc);
 	sc.item = item;
@@ -72,24 +125,32 @@ cmd_load_layout_add_pane(struct cmdq_item *item, struct winlink *wl,
 	sc.lc = lc;
 	sc.idx = -1;
 	sc.cwd = cwd;
+	sc.argv = argv;
+	sc.argc = argc;
 	sc.flags = 0;
 
-	if (spawn_pane(&sc, cause) == NULL)
+	wp = spawn_pane(&sc, cause);
+	cmd_load_layout_free_argv(argv, argc);
+	if (wp == NULL)
 		return (-1);
+	if (title != NULL && *title != '\0')
+		screen_set_title(&wp->base, title, 0);
 	return (0);
 }
 
 static int
 cmd_load_layout_build_window(struct cmdq_item *item, struct session *s,
-    struct json_node *win, int first, char **cause)
+    struct json_node *win, int first, int mode, char **cause)
 {
 	struct json_node	*panes, *pane, *layout;
 	struct winlink		*wl;
+	struct window_pane	*wp;
 	int64_t			 index;
-	const char		*name, *cwd;
+	const char		*name, *cwd, *command, *title;
 	char			*layout_text;
 	struct spawn_context	 sc;
-	int			 first_pane;
+	char			**argv = NULL;
+	int			 argc = 0, first_pane;
 
 	if (json_find_number(win, "index", &index, cause) != 0)
 		return (-1);
@@ -104,6 +165,12 @@ cmd_load_layout_build_window(struct cmdq_item *item, struct session *s,
 	}
 	if (json_find_string(pane, "cwd", &cwd, cause) != 0)
 		return (-1);
+	command = NULL;
+	json_find_string(pane, "command", &command, NULL);
+	title = NULL;
+	json_find_string(pane, "title", &title, NULL);
+
+	cmd_load_layout_build_argv(command, mode, &argv, &argc);
 
 	memset(&sc, 0, sizeof sc);
 	sc.item = item;
@@ -111,10 +178,18 @@ cmd_load_layout_build_window(struct cmdq_item *item, struct session *s,
 	sc.name = name;
 	sc.idx = (int)index;
 	sc.cwd = cwd;
+	sc.argv = argv;
+	sc.argc = argc;
 	sc.flags = first ? 0 : SPAWN_DETACHED;
 
-	if ((wl = spawn_window(&sc, cause)) == NULL)
+	wl = spawn_window(&sc, cause);
+	cmd_load_layout_free_argv(argv, argc);
+	if (wl == NULL)
 		return (-1);
+
+	wp = TAILQ_FIRST(&wl->window->panes);
+	if (wp != NULL && title != NULL && *title != '\0')
+		screen_set_title(&wp->base, title, 0);
 
 	first_pane = 1;
 	for (; pane != NULL; pane = json_array_next(pane)) {
@@ -124,7 +199,12 @@ cmd_load_layout_build_window(struct cmdq_item *item, struct session *s,
 		}
 		if (json_find_string(pane, "cwd", &cwd, cause) != 0)
 			return (-1);
-		if (cmd_load_layout_add_pane(item, wl, cwd, cause) != 0)
+		command = NULL;
+		json_find_string(pane, "command", &command, NULL);
+		title = NULL;
+		json_find_string(pane, "title", &title, NULL);
+		if (cmd_load_layout_add_pane(item, wl, cwd, command, title,
+		    mode, cause) != 0)
 			return (-1);
 	}
 
@@ -142,7 +222,7 @@ cmd_load_layout_build_window(struct cmdq_item *item, struct session *s,
 
 static int
 cmd_load_layout_build_session(struct cmdq_item *item, struct json_node *sess,
-    char **cause)
+    int mode, char **cause)
 {
 	struct json_node	*win_array, *win, *first_panes, *first_pane;
 	struct session		*s;
@@ -184,7 +264,7 @@ cmd_load_layout_build_session(struct cmdq_item *item, struct json_node *sess,
 	first_window = 1;
 	for (; win != NULL; win = json_array_next(win)) {
 		if (cmd_load_layout_build_window(item, s, win, first_window,
-		    cause) != 0) {
+		    mode, cause) != 0) {
 			session_destroy(s, 0, __func__);
 			return (-1);
 		}
@@ -214,7 +294,7 @@ cmd_load_layout_done(__unused struct client *c, const char *path, int error,
 	char				*text, *cause = NULL;
 	struct json_node		*root, *sess_array, *sess;
 	size_t				 size;
-	int				 any_causes = 0;
+	int				 any_causes = 0, mode;
 
 	if (!closed)
 		return;
@@ -247,13 +327,17 @@ cmd_load_layout_done(__unused struct client *c, const char *path, int error,
 		goto done;
 	}
 
+	mode = options_get_number(global_options, "layout-restore-commands");
+	if (cdata->force_auto)
+		mode = LAYOUT_RESTORE_AUTO;
+
 	{
 		u_int	nsessions = 0;
 
 		for (sess = json_array_first(sess_array); sess != NULL;
 		    sess = json_array_next(sess)) {
 			cause = NULL;
-			if (cmd_load_layout_build_session(item, sess,
+			if (cmd_load_layout_build_session(item, sess, mode,
 			    &cause) != 0) {
 				cfg_add_cause("%s: %s", path, cause);
 				free(cause);
@@ -294,6 +378,7 @@ cmd_load_layout_exec(struct cmd *self, struct cmdq_item *item)
 	cdata = xcalloc(1, sizeof *cdata);
 	cdata->item = item;
 	cdata->path = xstrdup(path);
+	cdata->force_auto = args_has(args, 'y');
 
 	file_read(cmdq_get_client(item), path, cmd_load_layout_done, cdata);
 

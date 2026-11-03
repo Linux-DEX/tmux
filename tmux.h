@@ -1393,6 +1393,8 @@ struct window_pane {
 #define PANE_FLOATOVERZOOM 0x200000
 #define PANE_CLOSEONCANCEL 0x400000
 #define PANE_UTMP 0x800000
+#define PANE_LAYERHIDDEN 0x1000000
+#define PANE_PINNED 0x2000000
 
 	bitstr_t	*sync_dirty;
 	u_int		 sync_dirty_size;
@@ -1555,7 +1557,13 @@ struct window {
 #define WINDOW_ZOOMED 0x8
 #define WINDOW_WASZOOMED 0x10
 #define WINDOW_RESIZE 0x20
+#define WINDOW_STACKED 0x40
+#define WINDOW_FLOATLAYERHIDDEN 0x80
 #define WINDOW_ALERTFLAGS (WINDOW_BELL|WINDOW_ACTIVITY|WINDOW_SILENCE)
+
+#define LAYOUT_RESTORE_PROMPT 0
+#define LAYOUT_RESTORE_AUTO 1
+#define LAYOUT_RESTORE_OFF 2
 
 	int			 alerts_queued;
 	TAILQ_ENTRY(window)	 alerts_entry;
@@ -2726,6 +2734,8 @@ int	load_cfg_from_buffer(const void *, size_t, const char *,
 void printflike(1, 2) cfg_add_cause(const char *, ...);
 void	cfg_print_causes(struct cmdq_item *);
 char	*layout_get_path(void);
+void	 layout_autosave_start(void);
+void	 layout_autosave_now(void);
 void	cfg_show_causes(struct session *);
 
 /* paste.c */

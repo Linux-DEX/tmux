@@ -3536,6 +3536,30 @@ format_cb_window_zoomed_flag(struct format_tree *ft)
 	return (NULL);
 }
 
+/* Callback for window_stacked_flag. */
+static void *
+format_cb_window_stacked_flag(struct format_tree *ft)
+{
+	if (ft->w != NULL) {
+		if (ft->w->flags & WINDOW_STACKED)
+			return (xstrdup("1"));
+		return (xstrdup("0"));
+	}
+	return (NULL);
+}
+
+/* Callback for pane_pinned_flag. */
+static void *
+format_cb_pane_pinned_flag(struct format_tree *ft)
+{
+	if (ft->wp != NULL) {
+		if (ft->wp->flags & PANE_PINNED)
+			return (xstrdup("1"));
+		return (xstrdup("0"));
+	}
+	return (NULL);
+}
+
 /* Callback for wrap_flag. */
 static void *
 format_cb_wrap_flag(struct format_tree *ft)
@@ -4050,6 +4074,9 @@ static const struct format_table_entry format_table[] = {
 	{ "pane_pid", FORMAT_TABLE_STRING,
 	  format_cb_pane_pid
 	},
+	{ "pane_pinned_flag", FORMAT_TABLE_STRING,
+	  format_cb_pane_pinned_flag
+	},
 	{ "pane_pipe", FORMAT_TABLE_STRING,
 	  format_cb_pane_pipe
 	},
@@ -4325,6 +4352,9 @@ static const struct format_table_entry format_table[] = {
 	},
 	{ "window_stack_index", FORMAT_TABLE_STRING,
 	  format_cb_window_stack_index
+	},
+	{ "window_stacked_flag", FORMAT_TABLE_STRING,
+	  format_cb_window_stacked_flag
 	},
 	{ "window_start_flag", FORMAT_TABLE_STRING,
 	  format_cb_window_start_flag

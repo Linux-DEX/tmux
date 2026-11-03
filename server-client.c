@@ -439,6 +439,7 @@ server_client_lost(struct client *c)
 	if (c->flags & CLIENT_ATTACHED) {
 		server_client_attached_lost(c);
 		events_fire_client("client-detached", c);
+		layout_autosave_now();
 	}
 	if (c->name != NULL && (c->flags & (CLIENT_CONTROL|CLIENT_TERMINAL)))
 		events_fire_client("client-closed", c);

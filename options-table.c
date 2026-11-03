@@ -62,6 +62,9 @@ static const char *options_table_bell_action_list[] = {
 static const char *options_table_visual_bell_list[] = {
 	"off", "on", "both", NULL
 };
+static const char *options_table_layout_restore_commands_list[] = {
+	"prompt", "auto", "off", NULL
+};
 static const char *options_table_cursor_style_list[] = {
 	"default", "blinking-block", "block", "blinking-underline", "underline",
 	"blinking-bar", "bar", NULL
@@ -655,6 +658,33 @@ const struct options_table_entry options_table[] = {
 		  "ANSI colours, or force the light or dark theme."
 	},
 
+	{ .name = "layout-autosave",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_num = 1,
+	  .text = "Automatically save session layouts to the layout file."
+	},
+
+	{ .name = "layout-autosave-interval",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .minimum = 5,
+	  .maximum = INT_MAX,
+	  .default_num = 60,
+	  .text = "Seconds between automatic layout saves when "
+		  "layout-autosave is on."
+	},
+
+	{ .name = "layout-restore-commands",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .choices = options_table_layout_restore_commands_list,
+	  .default_num = LAYOUT_RESTORE_PROMPT,
+	  .text = "How load-layout restores saved pane commands: "
+		  "'prompt' waits for Enter, 'auto' runs them, "
+		  "'off' starts a login shell only."
+	},
+
 	{ .name = "dark-theme-black",
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_SERVER,
@@ -876,7 +906,7 @@ const struct options_table_entry options_table[] = {
 	  .type = OPTIONS_TABLE_CHOICE,
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .choices = options_table_bell_action_list,
-	  .default_num = ALERT_ANY,
+	  .default_num = ALERT_OTHER,
 	  .text = "Action to take on a bell alert."
 	},
 
@@ -1197,7 +1227,9 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .default_str = "#[bold]DEX#[nobold] #{session_name} "
 			 "#{?#{window_zoomed_flag},#[fg=themeyellow]Z #[default],}"
-			 "#{?#{pane_floating_flag},#[fg=themecyan]float #[default],}",
+			 "#{?#{window_stacked_flag},#[fg=thememagenta]stack #[default],}"
+			 "#{?#{pane_floating_flag},#[fg=themecyan]float #[default],}"
+			 "#{?#{pane_pinned_flag},#[fg=themeyellow]pin #[default],}",
 	  .text = "Contents of the left side of the status line."
 	},
 
@@ -1366,7 +1398,7 @@ const struct options_table_entry options_table[] = {
 	  .type = OPTIONS_TABLE_CHOICE,
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .choices = options_table_visual_bell_list,
-	  .default_num = VISUAL_OFF,
+	  .default_num = VISUAL_BOTH,
 	  .text = "How bell alerts should be shown: a message ('on'), "
 		  "a message and a bell ('both') or nothing ('off')."
 	},

@@ -14,12 +14,19 @@ This is the Linux-DEX fork of next-3.9. Flagship differences from upstream:
 	* Prefix+P opens a fuzzy command palette (switch-mode -C)
 	* Prefix+h/j/k/l focus panes; Prefix+H/J/K/L swap with neighbors
 	* Prefix+u toggles a floating scratch pane (non-modal; -s size preset)
+	* Prefix+U toggles the floating pane layer (hide/show; PTYs keep running)
+	* Prefix+= pins/unpins a floating pane (stays on top)
+	* Prefix+M-s selects the stacked layout; M-n / M-p cycle panes
 	* Prefix+F hint-jumps URLs/paths/hashes; Prefix+M-f opens the match
 	* Prefix+S / BTab fuzzy session picker; Tab fuzzy window picker
-	* save-layout / load-layout persist session shapes + pane cwds
-	  (messages report session/window/pane counts)
+	* Other-window bell + pane-exited: sound and desktop notification
+	  (bell-action other, visual-bell both)
+	* save-layout / load-layout persist shapes, cwds, titles and commands
+	  (JSON v2; layout-restore-commands = prompt|auto|off; load-layout -y)
+	* layout-autosave (default on, 60s) and save on client detach
 	* upgrade-server saves layouts, stops the server, autoloads on restart
 	  (pane processes exit; true PTY-preserving live-exec is not claimed)
+	* example layouts under examples/layouts/
 	* one-command install.sh (see below)
 
 See example_tmux.conf for a short starter config.

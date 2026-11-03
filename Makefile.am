@@ -127,6 +127,7 @@ dist_tmux_SOURCES = \
 	cmd-new-window.c \
 	cmd-parse.y \
 	cmd-paste-buffer.c \
+	cmd-pin-pane.c \
 	cmd-pipe-pane.c \
 	cmd-queue.c \
 	cmd-refresh-client.c \
@@ -157,6 +158,7 @@ dist_tmux_SOURCES = \
 	cmd-swap-pane.c \
 	cmd-swap-window.c \
 	cmd-switch-client.c \
+	cmd-toggle-float-layer.c \
 	cmd-toggle-scratch.c \
 	cmd-unbind-key.c \
 	cmd-upgrade-server.c \

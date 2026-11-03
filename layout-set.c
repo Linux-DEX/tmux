@@ -35,6 +35,7 @@ static void	layout_set_main_h_mirrored(struct window *);
 static void	layout_set_main_v(struct window *);
 static void	layout_set_main_v_mirrored(struct window *);
 static void	layout_set_tiled(struct window *);
+static void	layout_set_stacked(struct window *);
 
 static const struct {
 	const char	*name;
@@ -47,6 +48,7 @@ static const struct {
 	{ "main-vertical", layout_set_main_v },
 	{ "main-vertical-mirrored", layout_set_main_v_mirrored },
 	{ "tiled", layout_set_tiled },
+	{ "stacked", layout_set_stacked },
 };
 
 int
@@ -76,6 +78,10 @@ layout_set_select(struct window *w, u_int layout)
 	if (layout > nitems(layout_sets) - 1)
 		layout = nitems(layout_sets) - 1;
 
+	/* Leaving stacked clears the stacked visibility flag. */
+	if (strcmp(layout_sets[layout].name, "stacked") != 0)
+		w->flags &= ~WINDOW_STACKED;
+
 	if (layout_sets[layout].arrange != NULL)
 		layout_sets[layout].arrange(w);
 
@@ -96,10 +102,7 @@ layout_set_next(struct window *w)
 			layout = 0;
 	}
 
-	if (layout_sets[layout].arrange != NULL)
-		layout_sets[layout].arrange(w);
-	w->lastlayout = layout;
-	return (layout);
+	return (layout_set_select(w, layout));
 }
 
 u_int
@@ -117,10 +120,7 @@ layout_set_previous(struct window *w)
 			layout--;
 	}
 
-	if (layout_sets[layout].arrange != NULL)
-		layout_sets[layout].arrange(w);
-	w->lastlayout = layout;
-	return (layout);
+	return (layout_set_select(w, layout));
 }
 
 static struct window_pane *
@@ -776,6 +776,56 @@ layout_set_tiled(struct window *w)
 
 	layout_set_link_floating(w, lcroot);
 	layout_set_fix(w);
+
+	layout_print_cell(w->layout_root, __func__, 1);
+
+	window_resize(w, lcroot->g.sx, lcroot->g.sy, -1, -1);
+	events_fire_window("window-layout-changed", w);
+	server_redraw_window(w);
+}
+
+/*
+ * Stacked layout: every tiled pane gets the full window size; only the active
+ * tiled pane is drawn (WINDOW_STACKED + window_pane_is_visible). Floats stay
+ * linked on top. Status shows "stack" via window_stacked_flag.
+ */
+static void
+layout_set_stacked(struct window *w)
+{
+	struct window_pane	*wp;
+	struct layout_cell	*lcroot, *lcchild;
+	u_int			 n, sx, sy;
+
+	n = window_count_panes(w, 0);
+	if (n == 0)
+		return;
+
+	sx = w->sx;
+	sy = w->sy;
+	if (sx < PANE_MINIMUM)
+		sx = PANE_MINIMUM;
+	if (sy < PANE_MINIMUM)
+		sy = PANE_MINIMUM;
+
+	layout_free(w, 1);
+	lcroot = w->layout_root = layout_create_cell(NULL);
+	layout_set_size(lcroot, sx, sy, 0, 0);
+	layout_make_node(lcroot, LAYOUT_TOPBOTTOM);
+
+	TAILQ_FOREACH(wp, &w->panes, entry) {
+		if (wp->layout_cell == NULL ||
+		    !layout_cell_is_tiled(wp->layout_cell))
+			continue;
+		lcchild = wp->layout_cell;
+		lcchild->parent = lcroot;
+		TAILQ_INSERT_TAIL(&lcroot->cells, lcchild, entry);
+		layout_set_size(lcchild, sx, sy, 0, 0);
+	}
+
+	layout_set_link_floating(w, lcroot);
+	layout_set_fix(w);
+
+	w->flags |= WINDOW_STACKED;
 
 	layout_print_cell(w->layout_root, __func__, 1);
 

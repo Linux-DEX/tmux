@@ -34,6 +34,8 @@ static char		**cfg_causes;
 static u_int		  cfg_ncauses;
 static struct cmdq_item	 *cfg_item;
 static int		  cfg_started;
+static struct event	  layout_autosave_ev;
+static int		  layout_autosave_armed;
 
 int                       cfg_quiet = 1;
 char                    **cfg_files;
@@ -66,6 +68,69 @@ layout_get_path(void)
 	}
 
 	return (NULL);
+}
+
+/* Queue a background save-layout (used by autosave and detach). */
+void
+layout_autosave_now(void)
+{
+	struct cmd_parse_result	*pr;
+	struct cmdq_item	*new_item;
+	struct cmdq_state	*state;
+
+	if (!options_get_number(global_options, "layout-autosave"))
+		return;
+	if (RB_EMPTY(&sessions))
+		return;
+
+	pr = cmd_parse_from_string("save-layout", NULL);
+	if (pr->status == CMD_PARSE_ERROR) {
+		free(pr->error);
+		return;
+	}
+	state = cmdq_new_state(NULL, NULL, 0);
+	new_item = cmdq_get_command(pr->cmdlist, state);
+	cmdq_append(NULL, new_item);
+	cmd_list_free(pr->cmdlist);
+	cmdq_free_state(state);
+}
+
+static void
+layout_autosave_timer(__unused int fd, __unused short events,
+    __unused void *arg)
+{
+	struct timeval	tv;
+	int		interval;
+
+	layout_autosave_now();
+
+	interval = options_get_number(global_options,
+	    "layout-autosave-interval");
+	if (interval < 5)
+		interval = 5;
+	timerclear(&tv);
+	tv.tv_sec = interval;
+	evtimer_add(&layout_autosave_ev, &tv);
+}
+
+void
+layout_autosave_start(void)
+{
+	struct timeval	tv;
+	int		interval;
+
+	if (layout_autosave_armed)
+		return;
+	layout_autosave_armed = 1;
+
+	evtimer_set(&layout_autosave_ev, layout_autosave_timer, NULL);
+	interval = options_get_number(global_options,
+	    "layout-autosave-interval");
+	if (interval < 5)
+		interval = 5;
+	timerclear(&tv);
+	tv.tv_sec = interval;
+	evtimer_add(&layout_autosave_ev, &tv);
 }
 
 /* If upgrade-server left an autoload marker, queue load-layout once. */
@@ -127,6 +192,7 @@ cfg_done(__unused struct cmdq_item *item, __unused void *data)
 	cfg_finished = 1;
 
 	layout_maybe_autoload();
+	layout_autosave_start();
 	cfg_show_causes(NULL);
 
 	if (cfg_item != NULL) {

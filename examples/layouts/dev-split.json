@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "generated": "2026-11-03T00:00:00Z",
+  "tmux_version": "next-3.9",
+  "sessions": [
+    {
+      "name": "dev",
+      "current_window": 0,
+      "windows": [
+        {
+          "index": 0,
+          "name": "code",
+          "panes": [
+            {
+              "index": 0,
+              "cwd": "~",
+              "command": "nvim"
+            },
+            {
+              "index": 1,
+              "cwd": "~",
+              "command": "git status"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

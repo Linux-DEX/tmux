@@ -29,11 +29,10 @@
 #include "tmux.h"
 
 /*
- * Write the layout (sessions, windows, panes, splits, per-window layout trees
- * and per-pane working directories) of every session on the server to a JSON
- * file, so that it can later be recreated with 'load-layout'. This does not
- * record or attempt to restore whatever process was running in each pane -
- * only the shape of the layout and where each pane's shell should start.
+ * Write the layout (sessions, windows, panes, splits, per-window layout trees,
+ * per-pane working directories, titles and commands) of every session on the
+ * server to a JSON file (version 2), so that it can later be recreated with
+ * 'load-layout'. Shell-only panes omit the command field.
  */
 
 static enum cmd_retval cmd_save_layout_exec(struct cmd *, struct cmdq_item *);
@@ -114,6 +113,49 @@ cmd_save_layout_pane_cwd(struct window_pane *wp)
 	return (xstrdup(""));
 }
 
+/* Return a pane command worth restoring, or NULL for a plain shell. */
+static char *
+cmd_save_layout_pane_command(struct window_pane *wp)
+{
+	char		*cmd, *base;
+	const char	*shell;
+
+	/*
+	 * Prefer argv (keeps arguments). Fall back to the live process name
+	 * when argv is empty (interactive shells that replaced themselves).
+	 */
+	if (wp->argc > 0)
+		cmd = cmd_stringify_argv(wp->argc, wp->argv);
+	else
+		cmd = NULL;
+	if (cmd == NULL || *cmd == '\0') {
+		free(cmd);
+		cmd = osdep_get_name(wp->fd, wp->tty);
+	}
+	if (cmd == NULL || *cmd == '\0') {
+		free(cmd);
+		return (NULL);
+	}
+
+	shell = wp->shell;
+	if (shell != NULL) {
+		base = strrchr(shell, '/');
+		base = (base != NULL) ? base + 1 : (char *)shell;
+		if (strcmp(cmd, shell) == 0 || strcmp(cmd, base) == 0) {
+			free(cmd);
+			return (NULL);
+		}
+	}
+	if (strcmp(cmd, "bash") == 0 || strcmp(cmd, "zsh") == 0 ||
+	    strcmp(cmd, "sh") == 0 || strcmp(cmd, "fish") == 0 ||
+	    strcmp(cmd, "ksh") == 0 || strcmp(cmd, "tcsh") == 0 ||
+	    strcmp(cmd, "dash") == 0) {
+		free(cmd);
+		return (NULL);
+	}
+	return (cmd);
+}
+
 static void
 cmd_save_layout_done(__unused struct client *c, const char *path, int error,
     int closed, __unused struct evbuffer *buffer, void *data)
@@ -152,6 +194,7 @@ cmd_save_layout_exec(struct cmd *self, struct cmdq_item *item)
 	struct window			*w;
 	struct window_pane		*wp;
 	char				*name_esc, *cwd, *cwd_esc, *layout;
+	char				*cmd, *cmd_esc, *title_esc;
 	u_int				 pane_index;
 	int				 first_session, first_window, first_pane;
 	time_t				 now;
@@ -174,7 +217,7 @@ cmd_save_layout_exec(struct cmd *self, struct cmdq_item *item)
 	time(&now);
 	strftime(tbuf, sizeof tbuf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
 	evbuffer_add_printf(evb,
-	    "{\"version\":1,\"generated\":\"%s\",\"tmux_version\":\"%s\","
+	    "{\"version\":2,\"generated\":\"%s\",\"tmux_version\":\"%s\","
 	    "\"sessions\":[", tbuf, getversion());
 
 	cdata = xcalloc(1, sizeof *cdata);
@@ -229,9 +272,29 @@ cmd_save_layout_exec(struct cmd *self, struct cmdq_item *item)
 				free(cwd);
 
 				evbuffer_add_printf(evb,
-				    "{\"index\":%u,\"cwd\":\"%s\"}",
+				    "{\"index\":%u,\"cwd\":\"%s\"",
 				    pane_index, cwd_esc);
 				free(cwd_esc);
+
+				if (wp->base.title != NULL &&
+				    *wp->base.title != '\0') {
+					title_esc = cmd_save_layout_json_escape(
+					    wp->base.title);
+					evbuffer_add_printf(evb,
+					    ",\"title\":\"%s\"", title_esc);
+					free(title_esc);
+				}
+
+				cmd = cmd_save_layout_pane_command(wp);
+				if (cmd != NULL) {
+					cmd_esc = cmd_save_layout_json_escape(
+					    cmd);
+					evbuffer_add_printf(evb,
+					    ",\"command\":\"%s\"", cmd_esc);
+					free(cmd_esc);
+					free(cmd);
+				}
+				evbuffer_add(evb, "}", 1);
 			}
 			evbuffer_add(evb, "]}", 2);
 		}

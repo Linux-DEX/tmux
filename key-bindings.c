@@ -111,7 +111,16 @@
 #define DEFAULT_CHEATSHEET_LAYOUT \
 	" 'Save layout   C-s' 'C-s' {save-layout}" \
 	" 'Load layout   C-r' 'C-r' {load-layout}" \
+	" 'Float layer   U' 'U' {toggle-float-layer}" \
+	" 'Pin float     =' '=' {pin-pane}" \
+	" 'Stacked       M-s' 'M-s' {select-layout stacked}" \
+	" 'Stack next    M-n' 'M-n' {select-pane -t :.+}" \
+	" 'Stack prev    M-p' 'M-p' {select-pane -t :.-}" \
 	" 'Upgrade server' '' {upgrade-server}"
+#define DEFAULT_CHEATSHEET_ALERTS \
+	" 'Bell = other window sound+notify' '' {}" \
+	" 'Pane exit also notifies' '' {}" \
+	" 'Ring a test bell' 'b' {run-shell \"printf '\\\\a'\"}"
 #define DEFAULT_CHEATSHEET_COPY \
 	" 'Copy mode     [' '[' {copy-mode}" \
 	" 'Hint-jump     F' 'F' {copy-mode ; send -X hint ; command-prompt -p'hint:' { send -X hint-select -- '%%' }}" \
@@ -121,6 +130,7 @@
 	" 'Panes >' 'p' {display-menu -xR -yP -T '#[align=centre]Panes' " DEFAULT_CHEATSHEET_PANES " }" \
 	" 'Sessions >' 's' {display-menu -xR -yP -T '#[align=centre]Sessions' " DEFAULT_CHEATSHEET_SESSIONS " }" \
 	" 'Layout >' 'l' {display-menu -xR -yP -T '#[align=centre]Layout' " DEFAULT_CHEATSHEET_LAYOUT " }" \
+	" 'Alerts >' 'a' {display-menu -xR -yP -T '#[align=centre]Alerts' " DEFAULT_CHEATSHEET_ALERTS " }" \
 	" 'Copy >' 'c' {display-menu -xR -yP -T '#[align=centre]Copy' " DEFAULT_CHEATSHEET_COPY " }" \
 	" ''" \
 	" 'All annotated keys' '?' {list-keys -N}" \
@@ -416,6 +426,31 @@ void
 key_bindings_init(void)
 {
 	static const char *const defaults[] = {
+		/* DEX alert defaults: other-window bell + sound/notify. */
+		"set -g monitor-bell on",
+		"set -g bell-action other",
+		"set -g visual-bell both",
+		"set-hook -g alert-bell {"
+		    " run-shell -b \"case $(uname -s) in"
+		    " Darwin)"
+		    " afplay /System/Library/Sounds/Glass.aiff 2>/dev/null;"
+		    " osascript -e 'display notification \\\"Bell in #{session_name}:#{window_name}\\\" with title \\\"tmux\\\"' 2>/dev/null;;"
+		    " *)"
+		    " notify-send tmux 'Bell in #{session_name}:#{window_name}' 2>/dev/null;"
+		    " (command -v paplay >/dev/null && paplay /usr/share/sounds/freedesktop/stereo/complete.oga ||"
+		    " command -v pw-play >/dev/null && pw-play /usr/share/sounds/freedesktop/stereo/complete.oga || true)"
+		    " 2>/dev/null;;"
+		    " esac\""
+		" }",
+		"set-hook -g pane-exited {"
+		    " run-shell -b \"case $(uname -s) in"
+		    " Darwin)"
+		    " afplay /System/Library/Sounds/Tink.aiff 2>/dev/null;"
+		    " osascript -e 'display notification \\\"Pane exited in #{session_name}:#{window_name}\\\" with title \\\"tmux\\\"' 2>/dev/null;;"
+		    " *)"
+		    " notify-send tmux 'Pane exited in #{session_name}:#{window_name}' 2>/dev/null;;"
+		    " esac\""
+		" }",
 		/* Prefix keys. */
 		"bind -N 'Send the prefix key' C-b { send-prefix }",
 		"bind -N 'Rotate through the panes' C-o { rotate-window }",
@@ -424,6 +459,11 @@ key_bindings_init(void)
 		"bind -N 'Cycle pane border type' B { if -F '#{==:#{pane-border-type},separate}' { set -w pane-border-type separate-active ; display-message 'pane-border-type separate-active' } { if -F '#{==:#{pane-border-type},separate-active}' { set -w pane-border-type joined ; display-message 'pane-border-type joined' } { set -w pane-border-type separate ; display-message 'pane-border-type separate' } } }",
 		"bind -N 'Command palette' P { new-pane -E -x75% -y45% -X0 -Y0; move-pane -P bottom-centre; switch-mode -Ck }",
 		"bind -N 'Toggle floating scratch pane' u { toggle-scratch }",
+		"bind -N 'Toggle floating pane layer' U { toggle-float-layer }",
+		"bind -N 'Pin or unpin floating pane' = { pin-pane }",
+		"bind -N 'Select stacked layout' M-s { select-layout stacked }",
+		"bind -N 'Next pane (stack cycle)' M-n { select-pane -t :.+ }",
+		"bind -N 'Previous pane (stack cycle)' M-p { select-pane -t :.- }",
 		"bind -N 'Save session layouts' C-s { save-layout }",
 		"bind -N 'Load session layouts' C-r { load-layout }",
 		"bind -N 'Hint-jump URLs and paths' F { copy-mode ; send -X hint ; command-prompt -p'hint:' { send -X hint-select -- '%%' } }",
@@ -455,7 +495,7 @@ key_bindings_init(void)
 		"bind -N 'Select window 9' 9 { select-window -t:=9 }",
 		"bind -N 'Prompt for a command' : { command-prompt }",
 		"bind -N 'Move to the previously active pane' \\; { last-pane }",
-		"bind -N 'Choose a paste buffer from a list' = { choose-buffer -Z }",
+		"bind -N 'Choose a paste buffer from a list' BSpace { choose-buffer -Z }",
 		"bind -N 'Key cheatsheet' ? { display-menu -xR -yP -T '#[align=centre]Linux-DEX keys' " DEFAULT_CHEATSHEET_MENU " }",
 		"bind -N 'Choose and detach a client from a list' D { choose-client -Z }",
 		"bind -N 'Spread panes out evenly' E { select-layout -E }",

@@ -847,10 +847,28 @@ window_redraw_active_switch(struct window *w, struct window_pane *wp)
 		if (wp == w->active)
 			break;
 
-		/* If the pane is floating, move to the front. */
+		/* If the pane is floating, move to the front (under pins). */
 		if (window_pane_is_floating(wp)) {
+			struct window_pane	*after = NULL, *loop;
+
 			TAILQ_REMOVE(&w->z_index, wp, zentry);
-			TAILQ_INSERT_HEAD(&w->z_index, wp, zentry);
+			if (wp->flags & PANE_PINNED)
+				TAILQ_INSERT_HEAD(&w->z_index, wp, zentry);
+			else {
+				TAILQ_FOREACH(loop, &w->z_index, zentry) {
+					if (window_pane_is_floating(loop) &&
+					    (loop->flags & PANE_PINNED))
+						after = loop;
+					else
+						break;
+				}
+				if (after != NULL)
+					TAILQ_INSERT_AFTER(&w->z_index, after,
+					    wp, zentry);
+				else
+					TAILQ_INSERT_HEAD(&w->z_index, wp,
+					    zentry);
+			}
 			wp->flags |= PANE_REDRAW;
 			redraw_invalidate_scene(w);
 		}
@@ -883,6 +901,7 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 	 */
 	TAILQ_FOREACH(wp, &w->z_index, zentry) {
 		if (window_pane_is_floating(wp) &&
+		    (~wp->flags & PANE_LAYERHIDDEN) &&
 		    window_pane_contains(wp, x, y))
 			return (wp);
 	}
@@ -2199,6 +2218,12 @@ window_pane_key(struct window_pane *wp, struct client *c, struct session *s,
 int
 window_pane_is_visible(struct window_pane *wp)
 {
+	if (wp->flags & PANE_LAYERHIDDEN)
+		return (0);
+	if ((wp->window->flags & WINDOW_STACKED) &&
+	    !window_pane_is_floating(wp) &&
+	    wp != wp->window->active)
+		return (0);
 	if (~wp->window->flags & WINDOW_ZOOMED)
 		return (1);
 	return (wp->layout_cell != NULL);

@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "generated": "2026-11-03T00:00:00Z",
+  "tmux_version": "next-3.9",
+  "sessions": [
+    {
+      "name": "monitor",
+      "current_window": 0,
+      "windows": [
+        {
+          "index": 0,
+          "name": "stack",
+          "panes": [
+            {
+              "index": 0,
+              "cwd": "~",
+              "title": "logs",
+              "command": "tail -f /var/log/system.log"
+            },
+            {
+              "index": 1,
+              "cwd": "~",
+              "title": "top",
+              "command": "top"
+            },
+            {
+              "index": 2,
+              "cwd": "~",
+              "title": "shell"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
