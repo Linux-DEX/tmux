@@ -290,6 +290,13 @@ build_and_install() {
 
 	log "installing to $PREFIX"
 	run_install make install
+
+	# make leaves a linker signature. macOS kills that binary (SIGKILL,
+	# "Code Signature Invalid") when it is launched from a terminal.
+	if [ "$OS" = macos ]; then
+		log "signing $PREFIX/bin/tmux"
+		run_install codesign --force --sign - "$PREFIX/bin/tmux"
+	fi
 }
 
 verify_install() {
