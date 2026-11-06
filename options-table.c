@@ -62,6 +62,9 @@ static const char *options_table_bell_action_list[] = {
 static const char *options_table_visual_bell_list[] = {
 	"off", "on", "both", NULL
 };
+static const char *options_table_notification_forward_list[] = {
+	"toast", "forward", "both", "nothing", NULL
+};
 static const char *options_table_layout_restore_commands_list[] = {
 	"prompt", "auto", "off", NULL
 };
@@ -843,6 +846,101 @@ const struct options_table_entry options_table[] = {
 	  .flags = OPTIONS_TABLE_IS_COLOUR,
 	  .default_str = "#{?#{e|>=:#{client_colours},256},purple4,magenta}",
 	  .text = "Light theme colour for magenta."
+	},
+
+	{ .name = "notifications",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_num = 1,
+	  .text = "Show bell, activity, silence and pane-exit alerts as status "
+		  "line toasts. When on, this replaces the "
+		  "visual-{bell,activity,silence} message."
+	},
+
+	{ .name = "notifications-activity",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .choices = options_table_notification_forward_list,
+	  .default_num = NOTIFICATION_TOAST,
+	  .text = "What to do with an activity alert: 'toast', forward a "
+		  "terminal bell ('forward'), 'both', or 'nothing'."
+	},
+
+	{ .name = "notifications-bell",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .choices = options_table_notification_forward_list,
+	  .default_num = NOTIFICATION_TOAST,
+	  .text = "What to do with a bell alert: 'toast', forward a terminal "
+		  "bell ('forward'), 'both', or 'nothing'. The sound cue is "
+		  "notifications-sound, so 'both' also rings the terminal."
+	},
+
+	{ .name = "notifications-desktop",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_num = 1,
+	  .text = "Send a desktop notification for a bell or a pane exit when "
+		  "a toast is shown."
+	},
+
+	{ .name = "notifications-duration",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .minimum = 0,
+	  .maximum = INT_MAX,
+	  .default_num = 5,
+	  .unit = "seconds",
+	  .text = "How long an info toast stays up. 0 keeps it until it is "
+		  "dismissed."
+	},
+
+	{ .name = "notifications-error-duration",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .minimum = 0,
+	  .maximum = INT_MAX,
+	  .default_num = 12,
+	  .unit = "seconds",
+	  .text = "How long an error toast stays up, unless "
+		  "notifications-error-sticky is on. 0 keeps it until it is "
+		  "dismissed."
+	},
+
+	{ .name = "notifications-error-sticky",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_num = 0,
+	  .text = "Keep error toasts until Escape or a jump, instead of the "
+		  "error duration."
+	},
+
+	{ .name = "notifications-silence",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .choices = options_table_notification_forward_list,
+	  .default_num = NOTIFICATION_TOAST,
+	  .text = "What to do with a silence alert: 'toast', forward a "
+		  "terminal bell ('forward'), 'both', or 'nothing'."
+	},
+
+	{ .name = "notifications-sound",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_num = 1,
+	  .text = "Play a sound for a bell or a pane exit when a toast is "
+		  "shown."
+	},
+
+	{ .name = "notifications-warning-duration",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .minimum = 0,
+	  .maximum = INT_MAX,
+	  .default_num = 8,
+	  .unit = "seconds",
+	  .text = "How long a warning toast, including a pane exit, stays up. "
+		  "0 keeps it until it is dismissed."
 	},
 
 	{ .name = "user-keys",

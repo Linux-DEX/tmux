@@ -417,8 +417,10 @@ server_destroy_pane(struct window_pane *wp, int notify)
 		return;
 	}
 
-	if (notify)
+	if (notify) {
 		server_fire_pane_exit("pane-exited", wp);
+		notifications_pane_exited(wp);
+	}
 
 	window_push_zoom(w, 0, wp->flags & PANE_FLOATOVERZOOM);
 	server_client_remove_pane(wp);

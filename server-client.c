@@ -195,6 +195,7 @@ server_client_create(int fd)
 
 	status_init(c);
 	status_side_init(c);
+	notifications_init(c);
 	c->flags |= CLIENT_FOCUSED;
 
 	c->keytable = key_bindings_get_table("root", 1);
@@ -460,6 +461,7 @@ server_client_lost(struct client *c)
 
 	status_free(c);
 	status_side_free(c);
+	notifications_free(c);
 	input_cancel_requests(c);
 
 	free(c->title);

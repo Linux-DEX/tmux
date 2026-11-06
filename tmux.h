@@ -144,6 +144,22 @@ struct winlink;
 #define VISUAL_ON 1
 #define VISUAL_BOTH 2
 
+/* Notification severities. */
+#define NOTIFICATION_INFO 0
+#define NOTIFICATION_WARNING 1
+#define NOTIFICATION_ERROR 2
+
+/* Forward option values (notifications-{bell,activity,silence}). */
+#define NOTIFICATION_TOAST 0
+#define NOTIFICATION_FORWARD 1
+#define NOTIFICATION_BOTH 2
+#define NOTIFICATION_NOTHING 3
+
+/* Which alert notifications_alert is forwarding. */
+#define NOTIFICATION_ALERT_BELL 0
+#define NOTIFICATION_ALERT_ACTIVITY 1
+#define NOTIFICATION_ALERT_SILENCE 2
+
 /* Key modifier bits. */
 #define KEYC_META            0x00100000000000ULL
 #define KEYC_CTRL            0x00200000000000ULL
@@ -2184,6 +2200,7 @@ struct status_line {
 	struct screen		 screen;
 	struct screen		*active;
 	int			 references;
+	u_int64_t		 notification_sig;
 
 	u_int			 prompt_cx;
 	struct grid_cell	 style;
@@ -2199,6 +2216,29 @@ struct side_status_line {
 	int			 linex;
 	struct style_ranges	 ranges;
 };
+
+/* Server notification (tuios-style toast shown in the status line). */
+#define NOTIFICATION_MAX_COUNT 16
+#define NOTIFICATION_MAX_WIDTH 72
+
+struct notification {
+	int			 severity;
+	char			*text;
+	int			 count;    /* number of repeats */
+	int			 sticky;   /* wait for esc, do not expire */
+	int			 duration; /* seconds; 0 means until dismissed */
+
+	u_int			 session_id;	/* jump target */
+	u_int			 window_id;
+	u_int			 pane_id;
+
+	int			 external;	/* play sound or notify */
+
+	struct timeval		 expiry;   /* zero for none */
+
+	TAILQ_ENTRY(notification) entry;
+};
+TAILQ_HEAD(notifications, notification);
 
 /* File in client. */
 typedef void (*client_file_cb) (struct client *, const char *, int, int,
@@ -2367,6 +2407,8 @@ struct client {
 
 	struct status_line	 status;
 	struct side_status_line	 side_status;
+	struct notifications	 notifications;
+	u_int			 notification_revision;
 	struct event		 cycle_timer;
 	enum client_theme	 theme;
 	enum client_theme	 active_theme;
@@ -3368,6 +3410,19 @@ const char	*key_string_lookup_key(key_code, int);
 void	alerts_reset_all(void);
 void	alerts_queue(struct window *, int);
 void	alerts_check_session(struct session *);
+
+/* notifications.c */
+void	 notifications_init(struct client *);
+void	 notifications_free(struct client *);
+void	 notifications_alert(struct session *, struct window *,
+	     struct window_pane *, int, int, const char *);
+void	 notifications_pane_exited(struct window_pane *);
+void	 notifications_arrived(struct session *, struct window *);
+void	 notifications_clear(struct client *);
+void	 notifications_jump(struct client *);
+u_int64_t notifications_signature(struct client *);
+void	 notifications_status_draw(struct client *,
+	     struct screen_write_ctx *, u_int, struct grid_cell *);
 
 /* file.c */
 int	 file_cmp(struct client_file *, struct client_file *);

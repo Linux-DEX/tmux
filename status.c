@@ -276,6 +276,8 @@ status_redraw(struct client *c)
 	struct grid_cell		 gc;
 	u_int				 lines, i, n, width = c->tty.sx;
 	int				 flags, force = 0, changed = 0, fg, bg;
+	int				 drew_line0 = 0;
+	u_int64_t			 nsig;
 	struct options_entry		*o;
 	union options_value		*ov;
 	struct format_tree		*ft;
@@ -298,6 +300,16 @@ status_redraw(struct client *c)
 		flags |= FORMAT_FORCE;
 	ft = format_create(c, NULL, FORMAT_NONE, flags);
 	format_defaults(ft, c, NULL, NULL, NULL);
+
+	/* Force a redraw when the notifications changed. */
+	if (status_line_size(c) != 0 && c->tty.sx != 0) {
+		nsig = notifications_signature(c);
+		if (nsig != sl->notification_sig) {
+			force = 1;
+			changed = 1;
+			sl->notification_sig = nsig;
+		}
+	}
 
 	/* Set up default colour. */
 	style_apply(&gc, s->options, "status-style", ft);
@@ -325,6 +337,8 @@ status_redraw(struct client *c)
 	if (o == NULL) {
 		for (n = 0; n < width * lines; n++)
 			screen_write_putc(&ctx, &gc, ' ');
+		style_ranges_free(&sl->entries[0].ranges);
+		drew_line0 = 1;
 	} else {
 		for (i = 0; i < lines; i++) {
 			screen_write_cursormove(&ctx, 0, i, 0);
@@ -333,6 +347,10 @@ status_redraw(struct client *c)
 			if (ov == NULL) {
 				for (n = 0; n < width; n++)
 					screen_write_putc(&ctx, &gc, ' ');
+				if (i == 0) {
+					style_ranges_free(&sl->entries[0].ranges);
+					drew_line0 = 1;
+				}
 				continue;
 			}
 			sle = &sl->entries[i];
@@ -356,8 +374,18 @@ status_redraw(struct client *c)
 
 			free(sle->expanded);
 			sle->expanded = expanded;
+			if (i == 0)
+				drew_line0 = 1;
 		}
 	}
+
+	/*
+	 * Toast is painted onto line 0 after that line's formats. Skip it
+	 * when line 0 was left as-is, or the click ranges stack up.
+	 */
+	if (drew_line0)
+		notifications_status_draw(c, &ctx, width, &gc);
+
 	screen_write_stop(&ctx);
 
 	/* Free the format tree. */
@@ -367,6 +395,8 @@ status_redraw(struct client *c)
 	log_debug("%s exit: force=%d, changed=%d", __func__, force, changed);
 	return (force || changed);
 }
+
+/* Prepare side status line. */
 
 /* Prepare side status line. */
 void

@@ -426,31 +426,13 @@ void
 key_bindings_init(void)
 {
 	static const char *const defaults[] = {
-		/* DEX alert defaults: other-window bell + sound/notify. */
+		/* Other-window bells. Sound and desktop alerts are the
+		 * notifications* options, drawn as a status-line toast. */
 		"set -g monitor-bell on",
 		"set -g bell-action other",
 		"set -g visual-bell both",
-		"set-hook -g alert-bell {"
-		    " run-shell -b \"case $(uname -s) in"
-		    " Darwin)"
-		    " afplay /System/Library/Sounds/Glass.aiff 2>/dev/null;"
-		    " osascript -e 'display notification \\\"Bell in #{session_name}:#{window_name}\\\" with title \\\"tmux\\\"' 2>/dev/null;;"
-		    " *)"
-		    " notify-send tmux 'Bell in #{session_name}:#{window_name}' 2>/dev/null;"
-		    " (command -v paplay >/dev/null && paplay /usr/share/sounds/freedesktop/stereo/complete.oga ||"
-		    " command -v pw-play >/dev/null && pw-play /usr/share/sounds/freedesktop/stereo/complete.oga || true)"
-		    " 2>/dev/null;;"
-		    " esac\""
-		" }",
-		"set-hook -g pane-exited {"
-		    " run-shell -b \"case $(uname -s) in"
-		    " Darwin)"
-		    " afplay /System/Library/Sounds/Tink.aiff 2>/dev/null;"
-		    " osascript -e 'display notification \\\"Pane exited in #{session_name}:#{window_name}\\\" with title \\\"tmux\\\"' 2>/dev/null;;"
-		    " *)"
-		    " notify-send tmux 'Pane exited in #{session_name}:#{window_name}' 2>/dev/null;;"
-		    " esac\""
-		" }",
+		"bind -N 'Clear notification toasts' Escape { clear-notifications }",
+		"bind -N 'Jump to the latest notification' Enter { clear-notifications -j }",
 		/* Prefix keys. */
 		"bind -N 'Send the prefix key' C-b { send-prefix }",
 		"bind -N 'Rotate through the panes' C-o { rotate-window }",

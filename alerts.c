@@ -184,6 +184,7 @@ alerts_check_bell(struct window *w)
 {
 	struct winlink	*wl;
 	struct session	*s;
+	char		*text;
 
 	if (~w->flags & WINDOW_BELL)
 		return (0);
@@ -211,7 +212,19 @@ alerts_check_bell(struct window *w)
 			continue;
 		s->flags |= SESSION_ALERTED;
 
-		alerts_set_message(wl, "Bell", "visual-bell");
+		/*
+		 * With server notifications on, the toast and the
+		 * notifications-bell option replace the visual-bell
+		 * feedback; otherwise the legacy message and TTY bell
+		 * is used.
+		 */
+		if (options_get_number(global_options, "notifications")) {
+			xasprintf(&text, "Bell in %s:%s", s->name, w->name);
+			notifications_alert(s, w, w->active, NOTIFICATION_INFO,
+			    NOTIFICATION_ALERT_BELL, text);
+			free(text);
+		} else
+			alerts_set_message(wl, "Bell", "visual-bell");
 	}
 
 	return (WINDOW_BELL);
@@ -222,6 +235,7 @@ alerts_check_activity(struct window *w)
 {
 	struct winlink	*wl;
 	struct session	*s;
+	char		*text;
 
 	if (~w->flags & WINDOW_ACTIVITY)
 		return (0);
@@ -247,7 +261,14 @@ alerts_check_activity(struct window *w)
 			continue;
 		s->flags |= SESSION_ALERTED;
 
-		alerts_set_message(wl, "Activity", "visual-activity");
+		if (options_get_number(global_options, "notifications")) {
+			xasprintf(&text, "Activity in %s:%s", s->name, w->name);
+			notifications_alert(s, w, w->active, NOTIFICATION_INFO,
+			    NOTIFICATION_ALERT_ACTIVITY, text);
+			free(text);
+		} else
+			alerts_set_message(wl, "Activity",
+			    "visual-activity");
 	}
 
 	return (WINDOW_ACTIVITY);
@@ -258,6 +279,7 @@ alerts_check_silence(struct window *w)
 {
 	struct winlink	*wl;
 	struct session	*s;
+	char		*text;
 
 	if (~w->flags & WINDOW_SILENCE)
 		return (0);
@@ -283,7 +305,13 @@ alerts_check_silence(struct window *w)
 			continue;
 		s->flags |= SESSION_ALERTED;
 
-		alerts_set_message(wl, "Silence", "visual-silence");
+		if (options_get_number(global_options, "notifications")) {
+			xasprintf(&text, "Silence in %s:%s", s->name, w->name);
+			notifications_alert(s, w, w->active, NOTIFICATION_INFO,
+			    NOTIFICATION_ALERT_SILENCE, text);
+			free(text);
+		} else
+			alerts_set_message(wl, "Silence", "visual-silence");
 	}
 
 	return (WINDOW_SILENCE);
