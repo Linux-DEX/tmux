@@ -56,6 +56,9 @@ static const char *options_table_status_position_list[] = {
 static const char *options_table_side_status_list[] = {
 	"off", "left", "right", NULL
 };
+static const char *options_table_side_status_rotate_list[] = {
+	"off", "90", NULL
+};
 static const char *options_table_bell_action_list[] = {
 	"none", "any", "current", "other", NULL
 };
@@ -299,6 +302,29 @@ static const char *options_table_status_format_default[] = {
 			OPTIONS_TABLE_SIDE_STATUS_CURRENT \
 		"}" \
 	"}"
+
+/* One glyph column: sessions downward, then cpu, ram, disk, network. */
+#define OPTIONS_TABLE_SIDE_COLUMN_FORMAT \
+	"#[list=left-marker fg=themelightgrey].#[nl]" \
+	"#[list=right-marker fg=themelightgrey].#[nl]" \
+	"#{S:" \
+		"#[range=session|#{session_id}" \
+		"#{?#{==:#{session_name},#{client_session}}," \
+			" list=focus fg=themeyellow bold," \
+			" list=on fg=themelightgrey nobold}" \
+		"]" \
+		"#{v:session_name}" \
+		"#[norange list=on fg=themedarkgrey].#[nl]" \
+	"}" \
+	"#[nolist norange]#[nl]" \
+	"#[nolist fg=themered]C#[nl]" \
+	"#[nolist fg=themewhite]#{v:host_cpu}#[nl]#[nl]" \
+	"#[nolist fg=themegreen]R#[nl]" \
+	"#[nolist fg=themewhite]#{v:host_ram}#[nl]#[nl]" \
+	"#[nolist fg=themeyellow]D#[nl]" \
+	"#[nolist fg=themewhite]#{v:host_disk}#[nl]#[nl]" \
+	"#[nolist fg=themecyan]N#[nl]" \
+	"#[nolist fg=themewhite]#{v:host_net}"
 
 /* Helpers for hook options. */
 #define OPTIONS_TABLE_HOOK(hook_name, default_value, hook_text) \
@@ -1220,7 +1246,7 @@ const struct options_table_entry options_table[] = {
 	  .type = OPTIONS_TABLE_CHOICE,
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .choices = options_table_side_status_list,
-	  .default_num = 0,
+	  .default_num = 1,
 	  .text = "Whether to draw a vertical status line at the left or "
 		  "right of the terminal."
 	},
@@ -1228,7 +1254,7 @@ const struct options_table_entry options_table[] = {
 	{ .name = "side-status-format",
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_SESSION,
-	  .default_str = OPTIONS_TABLE_SIDE_STATUS_FORMAT1,
+	  .default_str = OPTIONS_TABLE_SIDE_COLUMN_FORMAT,
 	  .text = "Format for the side status line."
 	},
 
@@ -1246,8 +1272,16 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .minimum = 1,
 	  .maximum = SHRT_MAX,
-	  .default_num = 14,
+	  .default_num = 2,
 	  .text = "Width of the side status line."
+	},
+
+	{ .name = "side-status-rotate",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .choices = options_table_side_status_rotate_list,
+	  .default_num = 0,
+	  .text = "Draw each side-status word as a picture rotated 90 degrees."
 	},
 
 	{ .name = "silence-action",
@@ -1299,7 +1333,7 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .minimum = 0,
 	  .maximum = INT_MAX,
-	  .default_num = 15,
+	  .default_num = 2,
 	  .unit = "seconds",
 	  .text = "Number of seconds between status line updates."
 	},
@@ -2353,3 +2387,17 @@ const struct options_table_entry options_table[] = {
 
 	{ .name = NULL }
 };
+
+/*
+ * Regress starts with -f/dev/null and compares screens against the tree side
+ * status. A normal config keeps the one-column default above.
+ */
+void
+options_table_use_tree_side_status(void)
+{
+	options_set_number(global_s_options, "side-status", 0);
+	options_set_number(global_s_options, "side-status-width", 14);
+	options_set_number(global_s_options, "status-interval", 15);
+	options_set_string(global_s_options, "side-status-format", 0, "%s",
+	    OPTIONS_TABLE_SIDE_STATUS_FORMAT1);
+}

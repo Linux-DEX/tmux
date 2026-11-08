@@ -7349,6 +7349,22 @@ prefixes are
 and
 .Xr dirname 3
 of the variable respectively.
+.Pp
+.Ql v:\&
+stacks the value one character per line.
+.Ql host_cpu ,
+.Ql host_ram
+and
+.Ql host_disk
+are percentages.
+.Ql host_net
+is the total interface rate in bytes per second, written as a number or with
+a
+.Ql K ,
+.Ql M
+or
+.Ql G
+suffix.
 .Ql q:\&
 will escape
 .Xr sh 1
@@ -7649,6 +7665,14 @@ The following variables are available, where appropriate:
 .It Li "hook_window_index" Ta "" Ta "Index of window where hook was run, if any"
 .It Li "hook_window_name" Ta "" Ta "Name of window where hook was run, if any"
 .It Li "host" Ta "#H" Ta "Hostname of local host"
+.It Li "host_cpu" Ta "" Ta "CPU use as a percentage"
+.It Li "host_disk" Ta "" Ta "Disk use of / as a percentage"
+.It Li "host_disk_usage" Ta "" Ta "Disk used/total, for example 40/230G"
+.It Li "host_net" Ta "" Ta "Network rate, as a number or with a K, M or G suffix"
+.It Li "host_net_down" Ta "" Ta "Download rate, same units as host_net"
+.It Li "host_net_up" Ta "" Ta "Upload rate, same units as host_net"
+.It Li "host_ram" Ta "" Ta "Memory use as a percentage"
+.It Li "host_ram_usage" Ta "" Ta "Memory used/total, for example 8/16G"
 .It Li "host_short" Ta "#h" Ta "Hostname of local host (no domain name)"
 .It Li "image_support" Ta "" Ta "1 if server has support for images"
 .It Li "insert_flag" Ta "" Ta "Pane insert flag"

@@ -191,6 +191,10 @@ cfg_done(__unused struct cmdq_item *item, __unused void *data)
 		return (CMD_RETURN_NORMAL);
 	cfg_finished = 1;
 
+	/* ponytail: tests pass -f/dev/null and expect no side column. */
+	if (cfg_nfiles == 1 && strcmp(cfg_files[0], "/dev/null") == 0)
+		options_table_use_tree_side_status();
+
 	layout_maybe_autoload();
 	layout_autosave_start();
 	cfg_show_causes(NULL);

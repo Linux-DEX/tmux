@@ -174,6 +174,8 @@ dist_tmux_SOURCES = \
 	file.c \
 	format-draw.c \
 	format.c \
+	hoststat.c \
+	rotate90.c \
 	fuzzy.c \
 	grid-reader.c \
 	grid-view.c \

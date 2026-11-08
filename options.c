@@ -1437,6 +1437,7 @@ options_push_changes(const char *name)
 	    strcmp(name, "status-position") == 0 ||
 	    strcmp(name, "side-status") == 0 ||
 	    strcmp(name, "side-status-width") == 0 ||
+	    strcmp(name, "side-status-rotate") == 0 ||
 	    strcmp(name, "pane-border-indicators") == 0 ||
 	    strcmp(name, "pane-border-lines") == 0 ||
 	    strcmp(name, "pane-border-status") == 0 ||

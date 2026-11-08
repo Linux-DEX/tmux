@@ -2779,6 +2779,20 @@ char	*layout_get_path(void);
 void	 layout_autosave_start(void);
 void	 layout_autosave_now(void);
 void	cfg_show_causes(struct session *);
+void	options_table_use_tree_side_status(void);
+struct host_stat {
+	int	 cpu;
+	int	 ram;
+	int	 disk;
+	char	 net[16];
+	char	 ram_usage[16];
+	char	 disk_usage[16];
+	char	 net_down[16];
+	char	 net_up[16];
+};
+void	host_stat_sample(struct host_stat *);
+void	rotate90_draw(struct screen_write_ctx *, struct client *,
+	    struct grid_cell *, u_int, u_int, u_int);
 
 /* paste.c */
 const char	*paste_buffer_name(struct paste_buffer *);

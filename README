@@ -6,6 +6,8 @@ screen and continue running in the background, then later reattached.
 
 This is the Linux-DEX fork of next-3.9. Flagship differences from upstream:
 
+	* side-status defaults to a one-column left strip: session names run
+	  downward, then C/R/D/N for cpu, ram, disk and network rate
 	* pane-border-type defaults to separate (full border around each pane);
 	  Prefix+B cycles separate → separate-active → joined
 	* status line branded "DEX" with path/host/mode cues; active borders

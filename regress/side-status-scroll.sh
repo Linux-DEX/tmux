@@ -18,11 +18,12 @@ cleanup()
 {
 	$TMUX2 kill-server >/dev/null 2>&1
 	$TMUX kill-server >/dev/null 2>&1
-	rm -f "$TMP"
+	rm -f "$TMP" "$TMP.side"
 }
 trap cleanup 0 1 15
 
 $TMUX new-session -d -s inner -n w0 -x 60 -y 10 'sleep 100' || exit 1
+$TMUX show -gv side-status-format >"$TMP.side" || exit 1
 i=1
 while [ "$i" -lt 15 ]; do
 	$TMUX new-window -d -n "w$i" 'sleep 100' || exit 1
@@ -123,7 +124,7 @@ compare "list=on rows" <<EOF
 EOF
 
 # With only one or two rows, a marker is not drawn over the current window.
-$TMUX set -gu side-status-format || exit 1
+$TMUX set -g side-status-format "$(cat "$TMP.side")" || exit 1
 $TMUX rename-window -t inner:0 w0 || exit 1
 $TMUX select-window -t inner:7 || exit 1
 $TMUX2 resize-window -t outer -y 2 || exit 1

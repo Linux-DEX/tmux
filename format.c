@@ -132,6 +132,7 @@ format_job_cmp(struct format_job *fj1, struct format_job *fj2)
 #define FORMAT_ENVIRON 0x80000000ULL
 #define FORMAT_DIFFERENCE 0x100000000ULL
 #define FORMAT_CYCLE 0x200000000ULL
+#define FORMAT_VERTICAL 0x400000000ULL
 
 /* Limit on recursion. */
 #define FORMAT_LOOP_LIMIT 100
@@ -554,6 +555,86 @@ format_cb_host_short(__unused struct format_tree *ft)
 	if ((cp = strchr(host, '.')) != NULL)
 		*cp = '\0';
 	return (xstrdup(host));
+}
+
+/* Callback for host_cpu. */
+static void *
+format_cb_host_cpu(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (format_printf("%d", st.cpu));
+}
+
+/* Callback for host_disk. */
+static void *
+format_cb_host_disk(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (format_printf("%d", st.disk));
+}
+
+/* Callback for host_disk_usage. */
+static void *
+format_cb_host_disk_usage(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (xstrdup(st.disk_usage));
+}
+
+/* Callback for host_net. */
+static void *
+format_cb_host_net(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (xstrdup(st.net));
+}
+
+/* Callback for host_net_down. */
+static void *
+format_cb_host_net_down(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (xstrdup(st.net_down));
+}
+
+/* Callback for host_net_up. */
+static void *
+format_cb_host_net_up(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (xstrdup(st.net_up));
+}
+
+/* Callback for host_ram. */
+static void *
+format_cb_host_ram(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (format_printf("%d", st.ram));
+}
+
+/* Callback for host_ram_usage. */
+static void *
+format_cb_host_ram_usage(__unused struct format_tree *ft)
+{
+	struct host_stat	st;
+
+	host_stat_sample(&st);
+	return (xstrdup(st.ram_usage));
 }
 
 /* Callback for pid. */
@@ -3876,6 +3957,30 @@ static const struct format_table_entry format_table[] = {
 	{ "host", FORMAT_TABLE_STRING,
 	  format_cb_host
 	},
+	{ "host_cpu", FORMAT_TABLE_STRING,
+	  format_cb_host_cpu
+	},
+	{ "host_disk", FORMAT_TABLE_STRING,
+	  format_cb_host_disk
+	},
+	{ "host_disk_usage", FORMAT_TABLE_STRING,
+	  format_cb_host_disk_usage
+	},
+	{ "host_net", FORMAT_TABLE_STRING,
+	  format_cb_host_net
+	},
+	{ "host_net_down", FORMAT_TABLE_STRING,
+	  format_cb_host_net_down
+	},
+	{ "host_net_up", FORMAT_TABLE_STRING,
+	  format_cb_host_net_up
+	},
+	{ "host_ram", FORMAT_TABLE_STRING,
+	  format_cb_host_ram
+	},
+	{ "host_ram_usage", FORMAT_TABLE_STRING,
+	  format_cb_host_ram_usage
+	},
 	{ "host_short", FORMAT_TABLE_STRING,
 	  format_cb_host_short
 	},
@@ -5092,7 +5197,7 @@ format_build_modifiers(struct format_expand_state *es, const char **s,
 
 	/*
 	 * Modifiers are a ; separated list of the forms:
-	 *	l,m,C,a,b,c,d,I,n,t,w,q,E,T,S,W,P,O,V,R,A,<,>
+	 *	l,m,C,a,b,c,d,I,n,t,v,w,q,E,T,S,W,P,O,V,R,A,<,>
 	 *	=a
 	 *	=/a
 	 *	=/a/
@@ -5111,7 +5216,7 @@ format_build_modifiers(struct format_expand_state *es, const char **s,
 			break;
 
 		/* Check single character modifiers with no arguments. */
-		if (strchr("labdnwETSWPOVL!<>A", cp[0]) != NULL &&
+		if (strchr("labdnwETSWPOVLv!<>A", cp[0]) != NULL &&
 		    format_is_end(cp[1])) {
 			format_add_modifier(&list, count, cp, 1, NULL, 0);
 			cp++;
@@ -6177,6 +6282,41 @@ format_cycle(struct format_expand_state *es, const char *frames, u_int count)
 	return (xstrndup(start, end - start));
 }
 
+/* Stack a string one UTF-8 character per line. */
+static char *
+format_vertical(const char *src)
+{
+	struct utf8_data	 ud;
+	enum utf8_state		 more;
+	char			*out;
+	size_t			 len, off = 0;
+	int			 first = 1;
+
+	len = strlen(src) * 2 + 1;
+	out = xmalloc(len);
+	while (*src != '\0') {
+		if ((more = utf8_open(&ud, *src)) == UTF8_MORE) {
+			while (*++src != '\0' && more == UTF8_MORE)
+				more = utf8_append(&ud, *src);
+			if (more != UTF8_DONE)
+				break;
+		} else if (*src >= 0x20 && *src < 0x7f) {
+			utf8_set(&ud, (u_char)*src);
+			src++;
+		} else {
+			src++;
+			continue;
+		}
+		if (!first)
+			out[off++] = '\n';
+		memcpy(out + off, ud.data, ud.size);
+		off += ud.size;
+		first = 0;
+	}
+	out[off] = '\0';
+	return (out);
+}
+
 /* Replace a key. */
 static int
 format_replace(struct format_expand_state *es, const char *key, size_t keylen,
@@ -6283,6 +6423,9 @@ format_replace(struct format_expand_state *es, const char *key, size_t keylen,
 				break;
 			case 'b':
 				modifiers |= FORMAT_BASENAME;
+				break;
+			case 'v':
+				modifiers |= FORMAT_VERTICAL;
 				break;
 			case 'c':
 				modifiers |= FORMAT_COLOUR;
@@ -6822,6 +6965,14 @@ done:
 		free(value);
 		value = new;
 		format_log(es, "applied padding width %d: %s", width, value);
+	}
+
+	/* One character per line. */
+	if (modifiers & FORMAT_VERTICAL) {
+		new = format_vertical(value);
+		free(value);
+		value = new;
+		format_log(es, "applied vertical: %s", value);
 	}
 
 	/* Replace with the length or width if needed. */

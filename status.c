@@ -502,10 +502,21 @@ status_side_redraw(struct client *c)
 		ss->linex = linex;
 	}
 
-	/* Expand the format. */
-	expanded = format_expand_time(ft,
-	    options_get_string(s->options, "side-status-format"));
-	format_free(ft);
+	/* Expand the format. A 90 degree rail is a picture of the words. */
+	if (options_get_number(s->options, "side-status-rotate") == 1) {
+		struct host_stat	hst;
+
+		host_stat_sample(&hst);
+		xasprintf(&expanded, "rot90\n%s\n%s\n%d\n%s\n%s\n%s\n%s",
+		    s->name, s->curw != NULL ? s->curw->window->name : "",
+		    hst.cpu, hst.ram_usage, hst.disk_usage, hst.net_down,
+		    hst.net_up);
+		format_free(ft);
+	} else {
+		expanded = format_expand_time(ft,
+		    options_get_string(s->options, "side-status-format"));
+		format_free(ft);
+	}
 
 	/* Skip the redraw if nothing has changed. */
 	if (!force &&
@@ -535,8 +546,12 @@ status_side_redraw(struct client *c)
 	}
 
 	screen_write_cursormove(&ctx, 0, 0, 0);
-	format_draw_lines(&ctx, &gc, linex == 0 ? 1 : 0, width, rows, expanded,
-	    &ss->ranges, 0);
+	if (options_get_number(s->options, "side-status-rotate") == 1) {
+		rotate90_draw(&ctx, c, &gc, linex == 0 ? 1 : 0, width, rows);
+	} else {
+		format_draw_lines(&ctx, &gc, linex == 0 ? 1 : 0, width, rows,
+		    expanded, &ss->ranges, 0);
+	}
 	screen_write_stop(&ctx);
 
 	free(ss->expanded);
