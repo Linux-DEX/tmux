@@ -195,6 +195,7 @@ server_client_create(int fd)
 
 	status_init(c);
 	status_side_init(c);
+	sidebar_init(c);
 	notifications_init(c);
 	c->flags |= CLIENT_FOCUSED;
 
@@ -461,6 +462,7 @@ server_client_lost(struct client *c)
 
 	status_free(c);
 	status_side_free(c);
+	sidebar_free(c);
 	notifications_free(c);
 	input_cancel_requests(c);
 
@@ -820,7 +822,7 @@ server_client_check_mouse_status(struct client *c, struct mouse_event *m,
 
 	m->statusat = status_at_line(c);
 	m->statuslines = status_line_size(c);
-	m->sideat = status_side_at_column(c);
+	m->sideat = sidebar_side_status_x(c);
 	m->sidewidth = status_side_size(c);
 
 	if (mflag != 0 && mloc == KEYC_MOUSE_LOCATION_SIDE_STATUS_BORDER) {
@@ -833,6 +835,19 @@ server_client_check_mouse_status(struct client *c, struct mouse_event *m,
 	    y < m->statusat + m->statuslines) {
 		sr = status_get_range(c, x, y - m->statusat);
 	} else {
+		int	wid;
+
+		if (sidebar_mouse(c, x, y, &wid)) {
+			if (wid >= 0) {
+				*loc = KEYC_MOUSE_LOCATION_STATUS;
+				m->s = wid;
+				m->w = -1;
+			} else
+				*loc = KEYC_MOUSE_LOCATION_STATUS_DEFAULT;
+			if (type == KEYC_TYPE_MOUSEDRAG && mflag == 0)
+				tty->mouse_drag_status = 1;
+			return (0);
+		}
 		if (m->sideat == -1 ||
 		    x < (u_int)m->sideat ||
 		    x >= m->sideat + m->sidewidth) {
@@ -1053,12 +1068,7 @@ have_event:
 			m->w = lwp->window->id;
 		}
 	} else if (loc == KEYC_MOUSE_LOCATION_NOWHERE) {
-		if (m->sideat == 0 && x >= m->sidewidth)
-			px = x - m->sidewidth;
-		else if (m->sideat > 0 && x >= (u_int)m->sideat)
-			px = m->sideat - 1;
-		else
-			px = x;
+		px = sidebar_pane_x(c, x);
 		if (m->statusat == 0 && y >= m->statuslines)
 			py = y - m->statuslines;
 		else if (m->statusat > 0 && y >= (u_int)m->statusat)
@@ -1768,17 +1778,14 @@ server_client_handle_menu_key(struct client *c, struct key_event *event)
 		m = &new_event.m;
 		m->statusat = status_at_line(c);
 		m->statuslines = status_line_size(c);
-		m->sideat = status_side_at_column(c);
+		m->sideat = sidebar_side_status_x(c);
 		m->sidewidth = status_side_size(c);
 
 		tty_window_offset(&c->tty, &ox, &oy, &sx, &sy);
-		if (m->sideat == 0 && m->x < m->sidewidth)
-			m->x = m->y = UINT_MAX;
-		else if (m->sideat > 0 && m->x >= (u_int)m->sideat)
+		if (sidebar_pane_outside(c, m->x))
 			m->x = m->y = UINT_MAX;
 		else {
-			if (m->sideat == 0)
-				m->x -= m->sidewidth;
+			m->x -= sidebar_view_xoff(c);
 			m->x += ox;
 			if (m->statusat == 0) {
 				if (m->y < m->statuslines)
@@ -2237,8 +2244,7 @@ server_client_prompt_cursor(struct client *c, struct window_pane *wp, int *mode,
 	if (window_position_is_visible(r, *cx)) {
 		if (status_at_line(c) == 0)
 			*cy += status_line_size(c);
-		if (status_side_at_column(c) == 0)
-			*cx += status_side_size(c);
+		*cx += sidebar_view_xoff(c);
 		*mode |= MODE_CURSOR;
 	}
 	return (1);
@@ -2307,8 +2313,7 @@ server_client_reset_state(struct client *c)
 				cy -= oy;
 				if (status_at_line(c) == 0)
 					cy += status_line_size(c);
-				if (status_side_at_column(c) == 0)
-					cx += status_side_size(c);
+				cx += sidebar_view_xoff(c);
 			}
 			prompt = 1;
 		} else {
@@ -2348,8 +2353,7 @@ server_client_reset_state(struct client *c)
 
 				if (status_at_line(c) == 0)
 					cy += status_line_size(c);
-				if (status_side_at_column(c) == 0)
-					cx += status_side_size(c);
+				cx += sidebar_view_xoff(c);
 			}
 
 			if (!cursor)

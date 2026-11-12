@@ -257,6 +257,7 @@ server_start(struct tmuxproc *client, uint64_t flags, struct event_base *base,
 	evtimer_add(&server_ev_tidy, &tv);
 
 	server_acl_init();
+	sidebar_timer_start();
 
 	server_add_accept(0);
 	proc_loop(server_proc, server_loop);

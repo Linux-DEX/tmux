@@ -56,6 +56,9 @@ static const char *options_table_status_position_list[] = {
 static const char *options_table_side_status_list[] = {
 	"off", "left", "right", NULL
 };
+static const char *options_table_sidebar_position_list[] = {
+	"right", "left", NULL
+};
 static const char *options_table_bell_action_list[] = {
 	"none", "any", "current", "other", NULL
 };
@@ -1214,6 +1217,90 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .default_str = "#S:#I:#W - \"#T\" #{session_alerts}",
 	  .text = "Format of the terminal title to set."
+	},
+
+	{ .name = "sidebar",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_num = 0,
+	  .text = "Show a vertical sidebar of window labels and system stats."
+	},
+
+	{ .name = "sidebar-gap",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .minimum = 0,
+	  .maximum = 5,
+	  .default_num = 1,
+	  .unit = "lines",
+	  .text = "Blank rows between the bottom of the sidebar and the status "
+		  "line. Panes still extend down to the status line."
+	},
+
+	{ .name = "sidebar-interval",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .minimum = 0,
+	  .maximum = INT_MAX,
+	  .default_num = 2,
+	  .unit = "seconds",
+	  .text = "Seconds between CPU, memory and disk samples. Zero disables "
+		  "updates. Samples are taken once in the server and shared."
+	},
+
+	{ .name = "sidebar-position",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .choices = options_table_sidebar_position_list,
+	  .default_num = 0,
+	  .text = "Position of the sidebar."
+	},
+
+	{ .name = "sidebar-stat-style",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_str = "default",
+	  .flags = OPTIONS_TABLE_IS_STYLE,
+	  .separator = ",",
+	  .text = "Style of sidebar stat blocks. 'default' keeps the status "
+		  "style with a darker background."
+	},
+
+	{ .name = "sidebar-stat-warn",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .minimum = 0,
+	  .maximum = 100,
+	  .default_num = 80,
+	  .unit = "%",
+	  .text = "Stat percentage at which sidebar-stat-warn-style is used."
+	},
+
+	{ .name = "sidebar-stat-warn-style",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_str = "bg=orange,fg=white",
+	  .flags = OPTIONS_TABLE_IS_STYLE,
+	  .separator = ",",
+	  .text = "Style of a sidebar stat block at or above sidebar-stat-warn."
+	},
+
+	{ .name = "sidebar-stats",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_str = "cpu,ram,disk",
+	  .text = "Comma-separated stats to show at the bottom of the sidebar: "
+		  "cpu, ram, disk. Empty shows none."
+	},
+
+	{ .name = "sidebar-width",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .minimum = 1,
+	  .maximum = 40,
+	  .default_num = 8,
+	  .text = "Width of the sidebar in columns. Increase or decrease with "
+		  "'set -g sidebar-width'."
 	},
 
 	{ .name = "side-status",

@@ -117,6 +117,7 @@ session_create(const char *prefix, const char *name, const char *cwd,
 	s->references = 1;
 	s->flags = 0;
 	s->cwd = xstrdup(cwd);
+	s->sidebar_disk = -1;
 
 	TAILQ_INIT(&s->lastw);
 	RB_INIT(&s->windows);
@@ -146,6 +147,7 @@ session_create(const char *prefix, const char *name, const char *cwd,
 		} while (RB_FIND(sessions, &sessions, s) != NULL);
 	}
 	RB_INSERT(sessions, &sessions, s);
+	sidebar_status_all();
 
 	log_debug("new session %s $%u", s->name, s->id);
 
@@ -205,6 +207,7 @@ session_destroy(struct session *s, int notify, const char *from)
 	s->curw = NULL;
 
 	RB_REMOVE(sessions, &sessions, s);
+	sidebar_status_all();
 	if (notify)
 		events_fire_session("session-closed", s);
 

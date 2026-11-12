@@ -441,6 +441,7 @@ key_bindings_init(void)
 		"bind -N 'Cycle pane border type' B { if -F '#{==:#{pane-border-type},separate}' { set -w pane-border-type separate-active ; display-message 'pane-border-type separate-active' } { if -F '#{==:#{pane-border-type},separate-active}' { set -w pane-border-type joined ; display-message 'pane-border-type joined' } { set -w pane-border-type separate ; display-message 'pane-border-type separate' } } }",
 		"bind -N 'Command palette' P { new-pane -E -x75% -y45% -X0 -Y0; move-pane -P bottom-centre; switch-mode -Ck }",
 		"bind -N 'Toggle floating scratch pane' u { toggle-scratch }",
+		"bind -N 'Toggle the sidebar' b { if -F '#{sidebar}' { set -g sidebar off ; display-message 'sidebar off' } { set -g sidebar on ; display-message 'sidebar on' } }",
 		"bind -N 'Toggle floating pane layer' U { toggle-float-layer }",
 		"bind -N 'Pin or unpin floating pane' = { pin-pane }",
 		"bind -N 'Select stacked layout' M-s { select-layout stacked }",

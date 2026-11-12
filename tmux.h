@@ -1721,6 +1721,7 @@ struct session {
 	u_int		 statuslines;
 	int		 sidestatusat; /* -1 off, 0 left, 1 right */
 	u_int		 sidestatuswidth;
+	int		 sidebar_disk; /* -1 if unknown */
 
 	struct options	*options;
 
@@ -2217,6 +2218,19 @@ struct side_status_line {
 	struct style_ranges	 ranges;
 };
 
+/* Vertical sidebar of rotated window labels and system stats. */
+struct sidebar_hit {
+	u_int			 y;
+	u_int			 sy;
+	int			 window_id;
+};
+struct sidebar_line {
+	struct screen		 screen;
+	struct sidebar_hit	*hits;
+	u_int			 nhits;
+	char			*signature;
+};
+
 /* Server notification (tuios-style toast shown in the status line). */
 #define NOTIFICATION_MAX_COUNT 16
 #define NOTIFICATION_MAX_WIDTH 72
@@ -2407,6 +2421,7 @@ struct client {
 
 	struct status_line	 status;
 	struct side_status_line	 side_status;
+	struct sidebar_line	 sidebar;
 	struct notifications	 notifications;
 	u_int			 notification_revision;
 	struct event		 cycle_timer;
@@ -3550,6 +3565,24 @@ struct style_range *status_get_range(struct client *, u_int, u_int);
 void	 status_init(struct client *);
 void	 status_free(struct client *);
 int	 status_redraw(struct client *);
+
+/* sidebar.c */
+void	 sidebar_init(struct client *);
+void	 sidebar_free(struct client *);
+u_int	 sidebar_size(struct client *);
+int	 sidebar_at_column(struct client *);
+u_int	 sidebar_view_xoff(struct client *);
+int	 sidebar_side_status_x(struct client *);
+u_int	 sidebar_pane_x(struct client *, u_int);
+int	 sidebar_pane_outside(struct client *, u_int);
+void	 sidebar_geometry(struct client *, u_int *, u_int *, u_int *, u_int *,
+	     u_int *, u_int *);
+int	 sidebar_redraw(struct client *);
+int	 sidebar_mouse(struct client *, u_int, u_int, int *);
+int	 sidebar_icon_at(struct screen *, u_int, u_int, u_int *,
+	     struct grid_cell *);
+void	 sidebar_timer_start(void);
+void	 sidebar_status_all(void);
 void printflike(6, 7) status_message_set(struct client *, int, int, int, int,
 	     const char *, ...);
 void	 status_message_clear(struct client *);

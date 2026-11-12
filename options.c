@@ -1433,10 +1433,17 @@ options_push_changes(const char *name)
 	    strcmp(name, "status-interval") == 0 ||
 	    strcmp(name, "side-status") == 0)
 		status_timer_start_all();
+	if (strcmp(name, "sidebar") == 0 ||
+	    strcmp(name, "sidebar-interval") == 0)
+		sidebar_timer_start();
 	if (strcmp(name, "status") == 0 ||
 	    strcmp(name, "status-position") == 0 ||
 	    strcmp(name, "side-status") == 0 ||
 	    strcmp(name, "side-status-width") == 0 ||
+	    strcmp(name, "sidebar") == 0 ||
+	    strcmp(name, "sidebar-width") == 0 ||
+	    strcmp(name, "sidebar-position") == 0 ||
+	    strcmp(name, "sidebar-gap") == 0 ||
 	    strcmp(name, "pane-border-indicators") == 0 ||
 	    strcmp(name, "pane-border-lines") == 0 ||
 	    strcmp(name, "pane-border-status") == 0 ||

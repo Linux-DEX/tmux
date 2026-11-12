@@ -101,6 +101,7 @@ enum redraw_phase {
 #define REDRAW_STATUS 0x40
 #define REDRAW_MENU 0x80
 #define REDRAW_SIDE_STATUS 0x100
+#define REDRAW_SIDEBAR 0x200
 
 /* Draw everything. */
 #define REDRAW_ALL 0x7fffffff
@@ -299,6 +300,8 @@ redraw_flags_to_string(int flags)
 		strlcat(s, "scrollbar ", sizeof s);
 	if (flags & REDRAW_MENU)
 		strlcat(s, "menu ", sizeof s);
+	if (flags & REDRAW_SIDEBAR)
+		strlcat(s, "sidebar ", sizeof s);
 	if (REDRAW_IS_ALL(flags))
 		strlcat(s, "all ", sizeof s);
 	if (*s != '\0')
@@ -315,7 +318,7 @@ redraw_get_window_offset(struct client *c, u_int *ox, u_int *oy, u_int *sx,
 
 	tty_window_offset(&c->tty, ox, oy, sx, sy);
 
-	tty_sx = c->tty.sx - status_side_size(c);
+	tty_sx = c->tty.sx - status_side_size(c) - sidebar_size(c);
 	tty_sy = c->tty.sy - status_line_size(c);
 	if (*sx < tty_sx)
 		*sx = tty_sx;
@@ -1877,8 +1880,7 @@ redraw_set_draw_context(struct redraw_draw_ctx *dctx,
 		dctx->flags |= REDRAW_STATUS_TOP;
 	dctx->status_lines = lines;
 
-	if (status_side_at_column(c) == 0)
-		dctx->side_left = status_side_size(c);
+	dctx->side_left = sidebar_view_xoff(c);
 
 	if ((c->flags & CLIENT_UTF8) && tty_term_has(tty->term, TTYC_BIDI))
 		dctx->flags |= REDRAW_ISOLATES;
@@ -1951,6 +1953,68 @@ redraw_draw_pane_prompt(struct redraw_draw_ctx *dctx, struct window_pane *wp)
 	screen_free(&screen);
 }
 
+/* Blank the gap between the sidebar and the status line. */
+static void
+screen_redraw_clear_rect(struct client *c, u_int x, u_int y, u_int w, u_int h)
+{
+	struct screen		 s;
+	struct grid_cell	 gc;
+	u_int			 i, j;
+
+	if (w == 0 || h == 0)
+		return;
+	screen_init(&s, w, h, 0);
+	memcpy(&gc, &grid_default_cell, sizeof gc);
+	utf8_set(&gc.data, ' ');
+	for (j = 0; j < h; j++) {
+		for (i = 0; i < w; i++)
+			grid_view_set_cell(s.grid, i, j, &gc);
+	}
+	for (j = 0; j < h; j++)
+		tty_draw_line(&c->tty, &s, 0, j, w, x, y + j, NULL);
+	screen_free(&s);
+}
+
+/* Draw the rotated sidebar beside the status line. */
+static void
+screen_redraw_draw_sidebar(struct client *c)
+{
+	struct tty	*tty = &c->tty;
+	u_int		 x, y, w, h, gy, gh, i;
+
+	sidebar_geometry(c, &x, &y, &w, &h, &gy, &gh);
+	if (w == 0)
+		return;
+	if (h != 0) {
+		for (i = 0; i < h; i++) {
+			struct grid_cell	igc;
+			u_int			cx;
+
+			tty_draw_line(tty, &c->sidebar.screen, 0, i, w, x,
+			    y + i, NULL);
+			/*
+			 * Nerd icons are one step larger than the letters.
+			 * Ghostty scales them with the kitty text-sizing
+			 * protocol; the following row is the bottom half.
+			 */
+			if (w >= 2 && i + 1 < h &&
+			    sidebar_icon_at(&c->sidebar.screen, i, w, &cx,
+			    &igc)) {
+				tty_draw_line(tty, &c->sidebar.screen, 0, i + 1,
+				    w, x, y + i + 1, NULL);
+				tty_attributes(tty, &igc, NULL);
+				tty_cursor(tty, x + cx, y + i);
+				tty_puts(tty, "\033]66;s=2;");
+				tty_putn(tty, igc.data.data, igc.data.size,
+				    igc.data.width);
+				tty_putc(tty, '\007');
+				i++;
+			}
+		}
+	}
+	screen_redraw_clear_rect(c, x, gy, w, gh);
+}
+
 /* Draw scene to client. */
 static void
 redraw_draw(struct client *c, struct window_pane *wp, int flags)
@@ -1969,6 +2033,16 @@ redraw_draw(struct client *c, struct window_pane *wp, int flags)
 
 	if (c->flags & CLIENT_SUSPENDED)
 		return;
+
+	if ((flags & REDRAW_SIDEBAR) || REDRAW_IS_ALL(flags)) {
+		if (!sidebar_redraw(c) &&
+		    (~c->flags & CLIENT_REDRAWSTATUSALWAYS) &&
+		    !REDRAW_IS_ALL(flags)) {
+			flags &= ~REDRAW_SIDEBAR;
+			if (flags == 0)
+				return;
+		}
+	}
 
 	if (flags & REDRAW_STATUS) {
 		if (c->message_string != NULL)
@@ -2086,7 +2160,7 @@ redraw_draw(struct client *c, struct window_pane *wp, int flags)
 
 	if (flags & REDRAW_SIDE_STATUS) {
 		side_width = status_side_size(c);
-		side_x = status_side_at_column(c);
+		side_x = sidebar_side_status_x(c);
 		if (side_width != 0 && side_x != -1) {
 			if (dctx.flags & REDRAW_STATUS_TOP)
 				y = dctx.status_lines;
@@ -2098,6 +2172,9 @@ redraw_draw(struct client *c, struct window_pane *wp, int flags)
 			}
 		}
 	}
+
+	if ((flags & REDRAW_SIDEBAR) || REDRAW_IS_ALL(flags))
+		screen_redraw_draw_sidebar(c);
 
 	if (flags & REDRAW_STATUS) {
 		lines = dctx.status_lines;
@@ -2168,7 +2245,7 @@ redraw_screen(struct client *c)
 			flags |= (REDRAW_PANE_BORDER|REDRAW_PANE_STATUS);
 		if (c->flags & (CLIENT_REDRAWSTATUS|CLIENT_REDRAWSTATUSALWAYS))
 			flags |= (REDRAW_STATUS|REDRAW_PANE_STATUS|
-			    REDRAW_SIDE_STATUS);
+			    REDRAW_SIDE_STATUS|REDRAW_SIDEBAR);
 		if (c->flags & CLIENT_REDRAWMENU)
 			flags |= REDRAW_MENU;
 		if (c->session->curw->window->menu != NULL)

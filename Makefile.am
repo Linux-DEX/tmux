@@ -211,6 +211,7 @@ dist_tmux_SOURCES = \
 	server-fn.c \
 	server.c \
 	session.c \
+	sidebar.c \
 	sort.c \
 	spawn.c \
 	status.c \
